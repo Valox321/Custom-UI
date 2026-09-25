@@ -21,7 +21,7 @@ Window:CreateSection("Elements")
 local TglTab = Window:CreateTab({ Name = "Toggle", Icon = "toggle-right", Section = "Elements" })
 local TglPage = TglTab:CreatePage({ Name = "Toggle" })
 TglPage:AddToggle({ Name = "Enabled", Description = "Schaltet etwas an/aus.", Default = false, Callback = print })
-TglPage:AddToggle({ Name = "Bereits an", Description = "Startet im ON-Zustand.", Default = true, Callback = print })
+TglPage:AddToggle({ Name = "Checkbox", Description = "Type = checkbox statt Switch.", Default = true, Type = "checkbox", Callback = print })
 
 local SldTab = Window:CreateTab({ Name = "Slider", Icon = "sliders-horizontal", Section = "Elements" })
 local SldPage = SldTab:CreatePage({ Name = "Slider" })

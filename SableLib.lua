@@ -9,9 +9,10 @@
 --//            Window:CreateTab({ Name = "Money", Icon = "coins", Section = Farm })
 --// local Page = Tab:CreatePage({ Name = "Level Up", Icon = "" })
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
+--//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.19"
+SableLib.Version = "1.20"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1239,7 +1240,35 @@ function SableLib:CreateWindow(opts)
 
 				local state = tOpts.Default or false
 				table.insert(win._toggleRegs, { tab = thisTab, get = function() return state end })
-				local track = create("TextButton", {
+				-- Type: "toggle" (Default, Switch) oder "checkbox" (Kasten mit Haken)
+				local kind = string.lower(tostring(tOpts.Type or "toggle"))
+				local isBox = (kind == "checkbox" or kind == "check" or kind == "box")
+				local track, knob, knobScale, boxBtn, checkMark = nil, nil, nil, nil, nil
+				if isBox then
+					boxBtn = create("TextButton", {
+						Parent = row,
+						AnchorPoint = Vector2.new(1, 0.5),
+						Position = UDim2.new(1, 0, 0.5, 0),
+						Size = UDim2.fromOffset(26, 26),
+						BackgroundColor3 = state and COLORS.Beige or COLORS.Dark,
+						Text = "",
+						AutoButtonColor = false,
+					})
+					corner(boxBtn, 8)
+					stroke(boxBtn, state and COLORS.Beige or COLORS.RowStroke, 1, 0.2)
+					glossBg(boxBtn)
+					checkMark = create("ImageLabel", {
+						Parent = boxBtn,
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.new(0.5, 0, 0.5, 0),
+						Size = UDim2.fromOffset(16, 16),
+						BackgroundTransparency = 1,
+						Image = SableLib:ResolveIcon("check") or "",
+						ImageColor3 = Color3.fromRGB(255, 255, 255),
+						Visible = state,
+					})
+				else
+				track = create("TextButton", {
 					Parent = row,
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(1, 0, 0.5, 0),
@@ -1251,7 +1280,7 @@ function SableLib:CreateWindow(opts)
 				corner(track, 13)
 				stroke(track, COLORS.RowStroke, 1, 0.5)
 				glossBg(track)
-				local knob = create("Frame", {
+				knob = create("Frame", {
 					Parent = track,
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
@@ -1266,13 +1295,30 @@ function SableLib:CreateWindow(opts)
 				local OFF_X = 4
 				local ON_X = 24
 				local function update()
+					if isBox then
+						TweenService:Create(boxBtn, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark }):Play()
+						checkMark.Visible = state
+						if state then
+							checkMark.Size = UDim2.fromOffset(0, 0)
+							TweenService:Create(checkMark, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(16, 16) }):Play()
+						end
+					else
 					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
 					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
 						BackgroundColor3 = COLORS.Knob,
 					}):Play()
+					end
 				end
 
+				if isBox then
+					boxBtn.MouseButton1Click:Connect(function()
+						state = not state
+						update()
+						if tOpts.Callback then pcall(tOpts.Callback, state) end
+						pcall(function() refreshHeader(win) end)
+					end)
+				else
 				-- wie WindUI: Knopf draggen (Snap zur Hälfte) oder klicken, Scale-Feedback beim Drücken
 				local dragging = false
 				local moved = false
@@ -1316,8 +1362,12 @@ function SableLib:CreateWindow(opts)
 						state = not state
 						update()
 						if tOpts.Callback then pcall(tOpts.Callback, state) end
+						pcall(function() refreshHeader(win) end)
 					end
 				end)
+				end
+
+				end
 
 				if state then update() end
 				pcall(function() refreshHeader(win) end)
