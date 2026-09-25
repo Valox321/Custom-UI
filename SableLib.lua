@@ -253,7 +253,7 @@ function SableLib:CreateWindow(opts)
 		Padding = UDim.new(0, 6),
 	})
 
-	-- BOTTOM NAV
+	-- BOTTOM NAV (logo links fix, tabs rechts scrollbar für viele Feature-Tabs)
 	local bottomBar = create("Frame", {
 		Name = "BottomBar",
 		Parent = main,
@@ -262,24 +262,35 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, 0, 0, 50),
 		BackgroundTransparency = 1,
 	})
-	local bottomLayout = create("UIListLayout", {
-		Parent = bottomBar,
-		FillDirection = Enum.FillDirection.Horizontal,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 8),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-
 	local logo = create("TextLabel", {
 		Parent = bottomBar,
 		Size = UDim2.fromOffset(70, 40),
+		Position = UDim2.new(0, 0, 0, 5),
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = Enum.Font.GothamBold,
 		TextSize = 24,
 		TextColor3 = COLORS.Beige,
 		TextXAlignment = Enum.TextXAlignment.Left,
-		LayoutOrder = 0,
+	})
+	local navScroll = create("ScrollingFrame", {
+		Name = "NavScroll",
+		Parent = bottomBar,
+		Position = UDim2.new(0, 78, 0, 5),
+		Size = UDim2.new(1, -78, 0, 40),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 0,
+		AutomaticCanvasSize = Enum.AutomaticSize.X,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollingDirection = Enum.ScrollingDirection.X,
+	})
+	create("UIListLayout", {
+		Parent = navScroll,
+		FillDirection = Enum.FillDirection.Horizontal,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 8),
+		VerticalAlignment = Enum.VerticalAlignment.Center,
 	})
 
 	makeDraggable(main, { topBar, contentCard, bottomBar })
@@ -302,6 +313,7 @@ function SableLib:CreateWindow(opts)
 	Window._topBar = topBar
 	Window._scroll = scroll
 	Window._bottomBar = bottomBar
+	Window._navScroll = navScroll
 	Window._currentTab = nil
 	Window._currentPage = nil
 
@@ -396,7 +408,7 @@ function SableLib:CreateWindow(opts)
 		local iconOnly = (tabName == "" or tabOpts.IconOnly == true)
 
 		local pill = create("TextButton", {
-			Parent = bottomBar,
+			Parent = navScroll,
 			Size = iconOnly and UDim2.fromOffset(40, 40) or UDim2.fromOffset(86, 40),
 			AutomaticSize = iconOnly and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
 			BackgroundColor3 = isActive and COLORS.PillActive or COLORS.PillBG,
@@ -413,28 +425,63 @@ function SableLib:CreateWindow(opts)
 
 		local Tab = { Name = tabName, Button = pill, Pages = {}, ParentWindow = self }
 
+		local function selectTab(target)
+			local win = target.ParentWindow
+			win._currentTab = target
+			for _, t in ipairs(win._tabs) do
+				stylePill(t.Button, t == target)
+			end
+			-- nur Top-Pills von diesem Tab zeigen
+			for _, p in ipairs(win._pages) do
+				p.TopButton.Visible = (p.ParentTab == target)
+			end
+			-- Seite bestimmen: aktuelle behalten wenn sie zu diesem Tab gehört, sonst erste
+			local toShow = nil
+			if win._currentPage and win._currentPage.ParentTab == target then
+				toShow = win._currentPage
+			else
+				toShow = target.Pages[1]
+			end
+			win._currentPage = toShow
+			for _, p in ipairs(win._pages) do
+				local active = (p == toShow)
+				if p.ParentTab == target then
+					stylePill(p.TopButton, active)
+				end
+				for _, r in ipairs(p.Rows) do
+					r.Visible = active
+				end
+			end
+			pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
+		end
+
+		pill.MouseButton1Click:Connect(function()
+			selectTab(Tab)
+		end)
+
 		function Tab:CreatePage(pageOpts)
 			pageOpts = pageOpts or {}
 			local pageName = pageOpts.Name or "Page"
 			local pageIcon = pageOpts.Icon or ""
 
 			local win = self.ParentWindow
-			local isFirstPage = (#win._pages == 0)
+			local isFirstOverall = (#win._pages == 0)
+			local isOwnTabSelected = (win._currentTab == nil and #win._tabs <= 1) or (win._currentTab == self)
 
 			local topPill = create("TextButton", {
 				Parent = win._topBar,
 				Size = UDim2.fromOffset(0, 32),
 				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundColor3 = isFirstPage and COLORS.PillActive or COLORS.PillBG,
+				BackgroundColor3 = COLORS.PillBG,
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
 				Text = "",
+				Visible = isOwnTabSelected,
 				LayoutOrder = #win._pages + 1,
 			})
 			corner(topPill, 16)
 			stroke(topPill, COLORS.RowStroke, 1, 0.3)
 			buildPillContent(topPill, pageIcon, pageName, false)
-			stylePill(topPill, isFirstPage)
 
 			local Page = {
 				Name = pageName,
@@ -445,22 +492,24 @@ function SableLib:CreateWindow(opts)
 			}
 
 			local function selectPage()
+				win._currentTab = self
+				win._currentPage = Page
+				for _, t in ipairs(win._tabs) do
+					stylePill(t.Button, t == self)
+				end
+				for _, p in ipairs(win._pages) do
+					p.TopButton.Visible = (p.ParentTab == self)
+				end
 				for _, p in ipairs(win._pages) do
 					local active = (p == Page)
-					stylePill(p.TopButton, active)
-					for _, row in ipairs(p.Rows) do
-						row.Visible = active
+					if p.ParentTab == self then
+						stylePill(p.TopButton, active)
+					end
+					for _, r in ipairs(p.Rows) do
+						r.Visible = active
 					end
 				end
-				win._currentPage = Page
-				-- also mark tab active if page belongs to it
-				for _, t in ipairs(win._tabs) do
-					local tabActive = (t == self)
-					if tabActive and #t.Pages > 0 then
-						-- keep simple: highlight tab that owns selected page
-					end
-					stylePill(t.Button, (t == self))
-				end
+				pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
 			end
 
 			topPill.MouseButton1Click:Connect(selectPage)
@@ -472,7 +521,7 @@ function SableLib:CreateWindow(opts)
 					Size = UDim2.new(1, 0, 0, height or 64),
 					BackgroundColor3 = COLORS.RowBG,
 					BorderSizePixel = 0,
-					Visible = isFirstPage,
+					Visible = (win._currentPage == Page),
 				})
 				corner(row, 10)
 				stroke(row, COLORS.RowStroke, 1, 0.4)
@@ -874,7 +923,7 @@ function SableLib:CreateWindow(opts)
 					Parent = win._scroll,
 					Size = UDim2.new(1, 0, 0, 28),
 					BackgroundTransparency = 1,
-					Visible = isFirstPage,
+					Visible = (win._currentPage == Page),
 				})
 				table.insert(Page.Rows, holder)
 				local title = create("TextLabel", {
@@ -1464,31 +1513,18 @@ function SableLib:CreateWindow(opts)
 
 			table.insert(self.Pages, Page)
 			table.insert(win._pages, Page)
-			if isFirstPage then
-				-- hide others already handled via Visible flag
+			if isFirstOverall then
+				win._currentTab = self
+				win._currentPage = Page
+				stylePill(topPill, true)
+				topPill.Visible = true
+			else
+				stylePill(topPill, false)
+				topPill.Visible = (win._currentTab == self)
+				-- rows bleiben versteckt bis Seite gewählt wird (baseRow prüft _currentPage)
 			end
 			return Page
 		end
-
-		pill.MouseButton1Click:Connect(function()
-			-- select first page of this tab, or just highlight tab
-			for _, t in ipairs(self.ParentWindow._tabs) do
-				stylePill(t.Button, t == Tab)
-			end
-			self.ParentWindow._currentTab = Tab
-			if #Tab.Pages > 0 then
-				-- simulate click on first page top pill
-				-- find page in window list and select it
-				local first = Tab.Pages[1]
-				for _, p in ipairs(self.ParentWindow._pages) do
-					local active = (p == first)
-					stylePill(p.TopButton, active)
-					for _, row in ipairs(p.Rows) do
-						row.Visible = active
-					end
-				end
-			end
-		end)
 
 		table.insert(self._tabs, Tab)
 		if isActive then

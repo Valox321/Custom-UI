@@ -1,5 +1,5 @@
---// sable example - baut das UI aus deinem Screenshot nach
-local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua"))()
+--// sable example - jedes Feature hat ein eigenes Bottom-Tab
+local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua?" .. tick()))()
 -- lokal testen: local Sable = loadstring(readfile("SableLib.lua"))()
 
 local Window = Sable:CreateWindow({
@@ -7,24 +7,23 @@ local Window = Sable:CreateWindow({
 	ToggleKey = Enum.KeyCode.RightShift,
 })
 
--- BOTTOM NAV (wie im Bild unten) - mit Lucide Icons
--- Alle Lucide Namen gehen, z.B. "house", "crosshair", "gem", "user", "map-pin", "eye", "bell", "settings"
--- Übersicht: https://lucide.dev/icons
+-- BOTTOM NAV: pro Feature ein Tab (Lucide-Namen, Übersicht: https://lucide.dev/icons)
 local Main = Window:CreateTab({ Name = "Main", Icon = "house" })
-Window:CreateTab({ Name = "", Icon = "crosshair", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "gem", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "user", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "map-pin", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "eye", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "bell", IconOnly = true })
-Window:CreateTab({ Name = "", Icon = "settings", IconOnly = true })
+local BtnTab = Window:CreateTab({ Name = "Button", Icon = "mouse-pointer-click" })
+local ToggleTab = Window:CreateTab({ Name = "Toggle", Icon = "toggle-left" })
+local SliderTab = Window:CreateTab({ Name = "Slider", Icon = "sliders-horizontal" })
+local DropTab = Window:CreateTab({ Name = "Dropdown", Icon = "list" })
+local InputTab = Window:CreateTab({ Name = "Input", Icon = "keyboard" })
+local KeyTab = Window:CreateTab({ Name = "Keybind", Icon = "command" })
+local ColorTab = Window:CreateTab({ Name = "Color", Icon = "palette" })
+local CodeTab = Window:CreateTab({ Name = "Code", Icon = "code" })
+local TextTab = Window:CreateTab({ Name = "Text", Icon = "type" })
 
--- TOP PILLS (wie im Bild oben) - mit Lucide Icons
+-- MAIN: Screenshot-Demo mit Top-Pills
 local LevelUp = Main:CreatePage({ Name = "Level Up", Icon = "trending-up" })
 local Mobs = Main:CreatePage({ Name = "Mobs", Icon = "skull" })
 local Bosses = Main:CreatePage({ Name = "Bosses", Icon = "crown" })
 
--- CONTENT: Level Up Seite
 LevelUp:AddToggle({
 	Name = "1 Click Level Up",
 	Description = "Takes the best quest, kills what it asks for, hands it in, repeats.",
@@ -56,31 +55,21 @@ LevelUp:AddButton({
 	end,
 })
 
-local questLabel = LevelUp:AddLabel({
+LevelUp:AddLabel({
 	Name = "Quest",
 	Description = "The quest you are on right now.",
 	Value = "Ill take 3 bandits",
 })
 
-local prog = LevelUp:AddProgress({ Name = "Progress", Value = 0.35 })
--- Beispiel: prog:Set(0.7)
--- Beispiel: questLabel:Set("Neuer Text")
+LevelUp:AddProgress({ Name = "Progress", Value = 0.35 })
 
--- CONTENT: andere Seiten (Beispiel) - alle Elements aus deinem Bild
 Mobs:AddSection({ Name = "Farming" })
-
-Mobs:AddParagraph({
-	Title = "How it works",
-	Body = "Auto Farm nimmt die Mobs aus der Liste unten und farmt sie der Reihe nach ab.",
-})
-
 Mobs:AddToggle({
 	Name = "Auto Farm Mobs",
 	Description = "Farms all nearby mobs automatically.",
 	Default = false,
 	Callback = function(v) print(v) end,
 })
-
 Mobs:AddSlider({
 	Name = "Farm Distance",
 	Min = 0,
@@ -89,43 +78,7 @@ Mobs:AddSlider({
 	Callback = function(v) print(v) end,
 })
 
-Mobs:AddDropdown({
-	Name = "Mob",
-	Description = "Which mob to farm.",
-	Options = { "Bandit", "Monkey", "Gorilla" },
-	Default = "Bandit",
-	Callback = function(v) print(v) end,
-})
-
-Mobs:AddInput({
-	Name = "Webhook",
-	Description = "Discord webhook for notifications.",
-	Placeholder = "https://discord.com/api/...",
-	Default = "",
-	Callback = function(v) print("input:", v) end,
-})
-
-Mobs:AddKeybind({
-	Name = "Farm Key",
-	Description = "Press to toggle farming.",
-	Default = Enum.KeyCode.F,
-	Callback = function(k) print("key:", k) end,
-})
-
-Mobs:AddColorpicker({
-	Name = "ESP Color",
-	Description = "Color for mob ESP.",
-	Default = Color3.fromRGB(242, 226, 184),
-	Callback = function(c) print(c) end,
-})
-
-Mobs:AddCode({
-	Title = "Config",
-	Code = "getgenv().Farm = true\n-- edit me",
-})
-
 Bosses:AddSection({ Name = "Bosses" })
-
 Bosses:AddToggle({
 	Name = "Auto Boss",
 	Description = "Teleports to boss and attacks.",
@@ -133,9 +86,49 @@ Bosses:AddToggle({
 	Callback = function(v) print(v) end,
 })
 
-Bosses:AddButton({
-	Name = "Kill All Bosses",
-	Description = "One-shot test button.",
-	Text = "Kill",
-	Callback = function() Window:Notify({ Title = "sable", Description = "done" }) end,
-})
+-- JEDE FEATURE-SEITE
+local P1 = BtnTab:CreatePage({ Name = "Buttons", Icon = "mouse-pointer-click" })
+P1:AddSection({ Name = "Button" })
+P1:AddButton({ Name = "Refresh Quests", Description = "Beispiel aus Main.", Text = "Click", Callback = function() Window:Notify({ Title = "sable", Description = "clicked" }) end })
+P1:AddButton({ Name = "Kill All Bosses", Description = "Zweiter Button.", Text = "Kill", Callback = function() print("kill") end })
+
+local P2 = ToggleTab:CreatePage({ Name = "Toggles", Icon = "toggle-left" })
+P2:AddSection({ Name = "Toggle" })
+P2:AddToggle({ Name = "1 Click Level Up", Description = "Toggle an/aus.", Default = false, Callback = print })
+P2:AddToggle({ Name = "Auto Quest", Description = "Zweites Toggle.", Default = true, Callback = print })
+
+local P3 = SliderTab:CreatePage({ Name = "Sliders", Icon = "sliders-horizontal" })
+P3:AddSection({ Name = "Slider" })
+P3:AddSlider({ Name = "Farm Distance", Min = 0, Max = 200, Default = 80, Callback = print })
+P3:AddSlider({ Name = "Speed", Min = 16, Max = 200, Default = 16, Callback = print })
+
+local P4 = DropTab:CreatePage({ Name = "Dropdowns", Icon = "list" })
+P4:AddSection({ Name = "Dropdown" })
+P4:AddDropdown({ Name = "Quest", Description = "Eigene Dropdown-Seite.", Options = { "Best for my level", "Bandits", "Monkeys", "Gorillas" }, Default = "Best for my level", Callback = print })
+P4:AddDropdown({ Name = "Mob", Description = "Zweites Dropdown.", Options = { "Bandit", "Monkey", "Gorilla" }, Default = "Bandit", Callback = print })
+
+local P5 = InputTab:CreatePage({ Name = "Inputs", Icon = "keyboard" })
+P5:AddSection({ Name = "Input" })
+P5:AddInput({ Name = "Webhook", Description = "Enter drücken zum Übernehmen.", Placeholder = "https://discord.com/api/...", Default = "", Callback = print })
+P5:AddInput({ Name = "Name", Description = "Zweites Input.", Placeholder = "Type here...", Default = "Valox", Callback = print })
+
+local P6 = KeyTab:CreatePage({ Name = "Keybinds", Icon = "command" })
+P6:AddSection({ Name = "Keybind" })
+P6:AddKeybind({ Name = "Farm Key", Description = "Klick auf Taste, dann neue Taste drücken.", Default = Enum.KeyCode.F, Callback = print })
+P6:AddKeybind({ Name = "Menu Key", Description = "Zweiter Keybind.", Default = Enum.KeyCode.RightShift, Callback = print })
+
+local P7 = ColorTab:CreatePage({ Name = "Colors", Icon = "palette" })
+P7:AddSection({ Name = "Colorpicker" })
+P7:AddColorpicker({ Name = "ESP Color", Description = "WindUI-Style mit SV + Hex/RGB + Apply.", Default = Color3.fromRGB(48, 255, 106), Callback = print })
+P7:AddColorpicker({ Name = "Accent", Description = "Zweiter Picker.", Default = Color3.fromRGB(242, 226, 184), Callback = print })
+
+local P8 = CodeTab:CreatePage({ Name = "Code", Icon = "code" })
+P8:AddSection({ Name = "Code" })
+P8:AddCode({ Title = "Config", Code = "getgenv().Farm = true\n-- edit me" })
+P8:AddCode({ Title = "Script", Code = "print('hello')" })
+
+local P9 = TextTab:CreatePage({ Name = "Text", Icon = "type" })
+P9:AddSection({ Name = "Section + Paragraph + Label" })
+P9:AddParagraph({ Title = "How it works", Body = "Paragraph für längere Erklärungen. Section oben trennt Gruppen." })
+P9:AddLabel({ Name = "Quest", Description = "Label mit Wert rechts.", Value = "Ill take 3 bandits" })
+P9:AddProgress({ Name = "Progress", Value = 0.6 })
