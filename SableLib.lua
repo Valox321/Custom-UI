@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.43"
+SableLib.Version = "1.44"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -2279,19 +2279,28 @@ function SableLib:CreateWindow(opts)
 				local bar = create("TextButton", {
 					Parent = row,
 					Position = UDim2.new(0, 0, 0, 44),
-					Size = UDim2.new(1, 0, 0, 10),
+					Size = UDim2.new(1, 0, 0, 6),
 					BackgroundColor3 = COLORS.TrackOff,
 					Text = "",
 					AutoButtonColor = false,
 				})
-				corner(bar, 4)
+				corner(bar, 3)
 				local fill = create("Frame", {
 					Parent = bar,
 					Size = UDim2.new((val - min) / math.max(1, (max - min)), 0, 1, 0),
 					BackgroundColor3 = COLORS.Beige,
 					BorderSizePixel = 0,
 				})
-				corner(fill, 4)
+				corner(fill, 3)
+				local knob = create("Frame", {
+					Parent = bar,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Position = UDim2.new((val - min) / math.max(1, (max - min)), 0, 0.5, 0),
+					Size = UDim2.fromOffset(26, 14),
+					BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+					BorderSizePixel = 0,
+				})
+				corner(knob, 7)
 				local dragging = false
 				local function setFromX(x)
 					local absPos = bar.AbsolutePosition
@@ -2299,6 +2308,7 @@ function SableLib:CreateWindow(opts)
 					local p = math.clamp((x - absPos.X) / absSize.X, 0, 1)
 					val = math.floor(min + (max - min) * p)
 					tw(fill, 0.08, { Size = UDim2.new(p, 0, 1, 0) })
+					knob.Position = UDim2.new(p, 0, 0.5, 0)
 					valLabel.Text = tostring(val)
 					if sOpts.Callback then
 						pcall(sOpts.Callback, val)
@@ -2308,6 +2318,7 @@ function SableLib:CreateWindow(opts)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						dragging = true
 						glowStroke(bar).Transparency = 0.5
+						glowStroke(knob).Transparency = 0.5
 						setFromX(input.Position.X)
 					end
 				end)
@@ -2315,6 +2326,7 @@ function SableLib:CreateWindow(opts)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 then
 						dragging = false
 						glowStroke(bar).Transparency = 1
+						glowStroke(knob).Transparency = 1
 					end
 				end)
 				UserInputService.InputChanged:Connect(function(input)
