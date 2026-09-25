@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.20"
+SableLib.Version = "1.21"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1244,6 +1244,24 @@ function SableLib:CreateWindow(opts)
 				local kind = string.lower(tostring(tOpts.Type or "toggle"))
 				local isBox = (kind == "checkbox" or kind == "check" or kind == "box")
 				local track, knob, knobScale, boxBtn, checkMark = nil, nil, nil, nil, nil
+				local OFF_X = 4
+				local ON_X = 24
+				local function update()
+					if isBox then
+						TweenService:Create(boxBtn, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark }):Play()
+						checkMark.Visible = state
+						if state then
+							checkMark.Size = UDim2.fromOffset(0, 0)
+							TweenService:Create(checkMark, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(16, 16) }):Play()
+						end
+					else
+					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
+					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+						BackgroundColor3 = COLORS.Knob,
+					}):Play()
+					end
+				end
 				if isBox then
 					boxBtn = create("TextButton", {
 						Parent = row,
@@ -1291,25 +1309,6 @@ function SableLib:CreateWindow(opts)
 				corner(knob, 10)
 				glossBg(knob)
 				create("UIScale", { Parent = knob, Scale = 1 })
-
-				local OFF_X = 4
-				local ON_X = 24
-				local function update()
-					if isBox then
-						TweenService:Create(boxBtn, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark }):Play()
-						checkMark.Visible = state
-						if state then
-							checkMark.Size = UDim2.fromOffset(0, 0)
-							TweenService:Create(checkMark, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(16, 16) }):Play()
-						end
-					else
-					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
-					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
-						BackgroundColor3 = COLORS.Knob,
-					}):Play()
-					end
-				end
 
 				if isBox then
 					boxBtn.MouseButton1Click:Connect(function()

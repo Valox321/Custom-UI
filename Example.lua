@@ -3,7 +3,7 @@
 --// WICHTIG: immer DIESE Datei ausfuehren (Repo-Stand), keine alte Kopie!
 local URL = "https://cdn.jsdelivr.net/gh/Valox321/Custom-UI@main/SableLib.lua?x=" .. tick()
 local src = game:HttpGet(URL, true)
-print("[sable] bytes:", #src, "| 1.19 drin:", src:find('Version = "1.19"', 1, true) ~= nil)
+print("[sable] bytes:", #src, "| 1.21 drin:", src:find('Version = "1.21"', 1, true) ~= nil)
 local Sable = loadstring(src)()
 print("[sable] lib version:", Sable.Version or "?")
 
