@@ -1,7 +1,9 @@
 --// sable | custom UI library (style like screenshot)
 --// Usage:
 --// local Sable = loadstring(game:HttpGet(".../SableLib.lua"))()
---// local Window = Sable:CreateWindow({ Name = "sable" })
+--// local Window = Sable:CreateWindow({ Name = "sable", Icon = "crown" })
+--//   Icon: Lucide-Name ("settings"), rbxassetid://... oder Asset-ID ("121040200759967")
+--//   + Window:SetTopIcon("crown") wechselt das Logo zur Laufzeit
 --// local Tab = Window:CreateTab({ Name = "Main", Icon = "+" })
 --// local Page = Tab:CreatePage({ Name = "Level Up", Icon = "" })
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
@@ -477,6 +479,9 @@ function SableLib:ResolveIcon(name)
 		return name, Vector2.new(0, 0), Vector2.new(0, 0)
 	end
 	local key = string.lower(string.match(name, "^%s*(.-)%s*$") or "")
+	if string.match(key, "^%d+$") then
+		return "rbxassetid://" .. key, Vector2.new(0, 0), Vector2.new(0, 0)
+	end
 	if IconAliases[key] then key = IconAliases[key] end
 	local url = LucideAssets[key]
 	if url then
@@ -671,7 +676,7 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.fromOffset(24, 24),
 		Position = UDim2.new(0, 2, 0, 4),
 		BackgroundTransparency = 1,
-		Image = SableLib:ResolveIcon("crown") or "",
+		Image = SableLib:ResolveIcon(opts.Icon or "crown") or "",
 		ImageColor3 = COLORS.Beige,
 	})
 	create("TextLabel", {

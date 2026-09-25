@@ -6,6 +6,7 @@ print("[sable] lib version:", Sable.Version or "?")
 local Window = Sable:CreateWindow({
 	Name = "Prestige Client",
 	Version = "BETA RELEASE 4.3.0",
+	Icon = "121040200759967",
 	ToggleKey = Enum.KeyCode.RightShift,
 	SearchPlaceholder = "Search modules",
 })
