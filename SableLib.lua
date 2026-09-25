@@ -11,7 +11,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.17-sections"
+SableLib.Version = "1.18"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -956,7 +956,8 @@ function SableLib:CreateWindow(opts)
 	-- Sidebar-Section (Gruppen-Label), z.B. "MODULES" oder custom "AUTO FARM"
 	-- Wird automatisch angelegt; CreateSection legt sie vorab an (Reihenfolge!)
 	local function ensureGroup(win, group)
-		group = tostring(group or "MODULES")
+		if group == nil or group == "" then return nil end
+		group = tostring(group)
 		if win._groups[group] then return group end
 		win._groups[group] = true
 		win._sideOrder = win._sideOrder + 1
@@ -1013,7 +1014,9 @@ function SableLib:CreateWindow(opts)
 		local isActive = (#self._tabs == 0)
 		local sec = tabOpts.Section or tabOpts.Group
 		if typeof(sec) == "table" and sec.Name then sec = sec.Name end
-		local group = ensureGroup(self, sec or "MODULES")
+		-- kein Default: ohne Section/Group hängt der Tab direkt in der Sidebar (ohne Label)
+		local group = nil
+		if sec ~= nil and sec ~= "" then group = ensureGroup(self, sec) end
 		self._sideOrder = self._sideOrder + 1
 		local btn = create("TextButton", {
 			Parent = self._sideList,

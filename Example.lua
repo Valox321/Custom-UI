@@ -12,6 +12,7 @@ local Window = Sable:CreateWindow({
 })
 
 -- MODULES (Sidebar oben, mit Counts wie im Screenshot)
+Window:CreateSection("Modules")
 local Combat = Window:CreateTab({ Name = "Combat", Title = "Combat Modules", Icon = "swords", Count = 39 })
 Window:CreateTab({ Name = "Mace", Icon = "hammer", Count = 13 })
 Window:CreateTab({ Name = "Misc", Icon = "wrench", Count = 26 })
