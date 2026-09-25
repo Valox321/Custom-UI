@@ -869,6 +869,389 @@ function SableLib:CreateWindow(opts)
 				return api
 			end
 
+			function Page:AddSection(sOpts)
+				local holder = create("Frame", {
+					Parent = win._scroll,
+					Size = UDim2.new(1, 0, 0, 28),
+					BackgroundTransparency = 1,
+					Visible = isFirstPage,
+				})
+				table.insert(Page.Rows, holder)
+				local title = create("TextLabel", {
+					Parent = holder,
+					Size = UDim2.new(1, 0, 1, 0),
+					BackgroundTransparency = 1,
+					Text = string.upper(sOpts.Name or sOpts.Title or "SECTION"),
+					Font = Enum.Font.GothamBold,
+					TextSize = 12,
+					TextColor3 = COLORS.Beige,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				create("Frame", {
+					Parent = holder,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, 0, 0.5, 0),
+					Size = UDim2.new(1, -(#title.Text * 8 + 16), 0, 1),
+					BackgroundColor3 = COLORS.RowStroke,
+					BackgroundTransparency = 0.4,
+					BorderSizePixel = 0,
+				})
+				return Page
+			end
+
+			function Page:AddParagraph(pOpts)
+				local row = baseRow(72)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, 0, 0, 18),
+					BackgroundTransparency = 1,
+					Text = pOpts.Title or pOpts.Name or "Paragraph",
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				local body = create("TextLabel", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 20),
+					Size = UDim2.new(1, 0, 1, -22),
+					BackgroundTransparency = 1,
+					Text = pOpts.Body or pOpts.Description or pOpts.Text or "",
+					Font = Enum.Font.Gotham,
+					TextSize = 12,
+					TextColor3 = COLORS.Sub,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Top,
+					TextWrapped = true,
+				})
+				local api = {}
+				function api:Set(t) body.Text = tostring(t) end
+				return Page
+			end
+
+			function Page:AddInput(iOpts)
+				local row = baseRow(58)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, -190, 0, 18),
+					BackgroundTransparency = 1,
+					Text = iOpts.Name or "Input",
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				create("TextLabel", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 20),
+					Size = UDim2.new(1, -190, 1, -22),
+					BackgroundTransparency = 1,
+					Text = iOpts.Description or "",
+					Font = Enum.Font.Gotham,
+					TextSize = 12,
+					TextColor3 = COLORS.Sub,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Top,
+					TextWrapped = true,
+				})
+				local box = create("TextBox", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, 0, 0.5, 0),
+					Size = UDim2.fromOffset(178, 30),
+					BackgroundColor3 = COLORS.Dark,
+					Text = iOpts.Default or "",
+					PlaceholderText = iOpts.Placeholder or "Type here...",
+					Font = Enum.Font.GothamMedium,
+					TextSize = 12,
+					TextColor3 = COLORS.Text,
+					PlaceholderColor3 = COLORS.Sub,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					ClearTextOnFocus = false,
+				})
+				corner(box, 8)
+				stroke(box, COLORS.RowStroke, 1, 0.2)
+				padding(box, 10, 0, 10, 0)
+				box.FocusLost:Connect(function(enter)
+					if enter and iOpts.Callback then
+						pcall(iOpts.Callback, box.Text)
+					end
+				end)
+				local api = {}
+				function api:Set(v) box.Text = tostring(v) end
+				function api:Get() return box.Text end
+				return api
+			end
+
+			function Page:AddKeybind(kOpts)
+				local row = baseRow(58)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, -130, 0, 18),
+					BackgroundTransparency = 1,
+					Text = kOpts.Name or "Keybind",
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				create("TextLabel", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 20),
+					Size = UDim2.new(1, -130, 1, -22),
+					BackgroundTransparency = 1,
+					Text = kOpts.Description or "",
+					Font = Enum.Font.Gotham,
+					TextSize = 12,
+					TextColor3 = COLORS.Sub,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextWrapped = true,
+				})
+				local current = kOpts.Default or Enum.KeyCode.F
+				local function keyName(k)
+					if typeof(k) == "EnumItem" then return k.Name end
+					return tostring(k)
+				end
+				local btn = create("TextButton", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, 0, 0.5, 0),
+					Size = UDim2.fromOffset(110, 30),
+					BackgroundColor3 = COLORS.Dark,
+					Text = keyName(current),
+					Font = Enum.Font.GothamBold,
+					TextSize = 12,
+					TextColor3 = COLORS.Beige,
+					AutoButtonColor = false,
+				})
+				corner(btn, 8)
+				stroke(btn, COLORS.RowStroke, 1, 0.2)
+				local listening = false
+				btn.MouseButton1Click:Connect(function()
+					listening = true
+					btn.Text = "..."
+				end)
+				UserInputService.InputBegan:Connect(function(input, gpe)
+					if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+						listening = false
+						current = input.KeyCode
+						btn.Text = keyName(current)
+						if kOpts.Callback then pcall(kOpts.Callback, current) end
+					elseif not listening and not gpe and input.KeyCode == current then
+						if kOpts.Callback then pcall(kOpts.Callback, current) end
+					end
+				end)
+				local api = {}
+				function api:Set(k) current = k btn.Text = keyName(k) end
+				function api:Get() return current end
+				return api
+			end
+
+			function Page:AddColorpicker(cOpts)
+				local row = baseRow(58)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, -90, 0, 18),
+					BackgroundTransparency = 1,
+					Text = cOpts.Name or "Color",
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				create("TextLabel", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 20),
+					Size = UDim2.new(1, -90, 1, -22),
+					BackgroundTransparency = 1,
+					Text = cOpts.Description or "",
+					Font = Enum.Font.Gotham,
+					TextSize = 12,
+					TextColor3 = COLORS.Sub,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextWrapped = true,
+				})
+				local col = cOpts.Default or Color3.fromRGB(242, 226, 184)
+				local preview = create("TextButton", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, 0, 0.5, 0),
+					Size = UDim2.fromOffset(60, 30),
+					BackgroundColor3 = col,
+					Text = "",
+					AutoButtonColor = false,
+				})
+				corner(preview, 8)
+				stroke(preview, COLORS.RowStroke, 1, 0.1)
+
+				local open = false
+				local pop = nil
+				local function makeChannel(parent, y, label, value)
+					create("TextLabel", {
+						Parent = parent,
+						Position = UDim2.new(0, 10, 0, y),
+						Size = UDim2.fromOffset(14, 20),
+						BackgroundTransparency = 1,
+						Text = label,
+						Font = Enum.Font.GothamBold,
+						TextSize = 12,
+						TextColor3 = COLORS.Sub,
+					})
+					local bar = create("TextButton", {
+						Parent = parent,
+						Position = UDim2.new(0, 28, 0, y + 5),
+						Size = UDim2.new(1, -56, 0, 10),
+						BackgroundColor3 = COLORS.TrackOff,
+						Text = "",
+						AutoButtonColor = false,
+					})
+					corner(bar, 5)
+					local fill = create("Frame", {
+						Parent = bar,
+						Size = UDim2.new(value / 255, 0, 1, 0),
+						BackgroundColor3 = COLORS.Beige,
+						BorderSizePixel = 0,
+					})
+					corner(fill, 5)
+					local num = create("TextLabel", {
+						Parent = parent,
+						AnchorPoint = Vector2.new(1, 0),
+						Position = UDim2.new(1, -10, 0, y),
+						Size = UDim2.fromOffset(30, 20),
+						BackgroundTransparency = 1,
+						Text = tostring(math.floor(value)),
+						Font = Enum.Font.GothamMedium,
+						TextSize = 12,
+						TextColor3 = COLORS.Text,
+						TextXAlignment = Enum.TextXAlignment.Right,
+					})
+					return bar, fill, num
+				end
+
+				preview.MouseButton1Click:Connect(function()
+					if open and pop then open = false pop:Destroy() pop = nil return end
+					open = true
+					local r = math.floor(col.R * 255)
+					local g = math.floor(col.G * 255)
+					local b = math.floor(col.B * 255)
+					pop = create("Frame", {
+						Parent = gui,
+						Size = UDim2.fromOffset(240, 132),
+						BackgroundColor3 = COLORS.PillBG,
+						BorderSizePixel = 0,
+						ZIndex = 60,
+					})
+					corner(pop, 10)
+					stroke(pop, COLORS.RowStroke, 1, 0.1)
+					local p = preview.AbsolutePosition
+					pop.Position = UDim2.fromOffset(math.max(8, p.X - 180), p.Y + 36)
+					local rBar, rFill, rNum = makeChannel(pop, 10, "R", r)
+					local gBar, gFill, gNum = makeChannel(pop, 40, "G", g)
+					local bBar, bFill, bNum = makeChannel(pop, 70, "B", b)
+					-- simple click-to-set via closures capturing r/g/b refs:
+					local function setR(v) r = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
+					local function setG(v) g = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
+					local function setB(v) b = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
+					local function hook(bar, fill, num, setFn)
+						local drag = false
+						bar.InputBegan:Connect(function(i)
+							if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
+						end)
+						UserInputService.InputEnded:Connect(function(i)
+							if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
+						end)
+						UserInputService.InputChanged:Connect(function(i)
+							if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
+								local ap = bar.AbsolutePosition
+								local as = bar.AbsoluteSize
+								local t = math.clamp((i.Position.X - ap.X) / math.max(1, as.X), 0, 1)
+								fill.Size = UDim2.new(t, 0, 1, 0)
+								num.Text = tostring(math.floor(t * 255))
+								setFn(math.floor(t * 255))
+							end
+						end)
+					end
+					hook(rBar, rFill, rNum, setR)
+					hook(gBar, gFill, gNum, setG)
+					hook(bBar, bFill, bNum, setB)
+					create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0, 10, 0, 100),
+						Size = UDim2.new(1, -20, 0, 22),
+						BackgroundColor3 = COLORS.Beige,
+						Text = "Done",
+						Font = Enum.Font.GothamBold,
+						TextSize = 12,
+						TextColor3 = COLORS.BeigeText,
+					}).MouseButton1Click:Connect(function()
+						open = false if pop then pop:Destroy() pop = nil end
+					end)
+				end)
+				local api = {}
+				function api:Set(c) col = c preview.BackgroundColor3 = c end
+				function api:Get() return col end
+				return api
+			end
+
+			function Page:AddCode(cOpts)
+				local row = baseRow(96)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, -70, 0, 18),
+					BackgroundTransparency = 1,
+					Text = cOpts.Title or cOpts.Name or "Code",
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+				})
+				local copy = create("TextButton", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 0, 0, 0),
+					Size = UDim2.fromOffset(56, 22),
+					BackgroundColor3 = COLORS.Dark,
+					Text = "Copy",
+					Font = Enum.Font.GothamBold,
+					TextSize = 11,
+					TextColor3 = COLORS.Beige,
+					AutoButtonColor = false,
+				})
+				corner(copy, 6)
+				stroke(copy, COLORS.RowStroke, 1, 0.3)
+				local codeBox = create("TextBox", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 26),
+					Size = UDim2.new(1, 0, 1, -28),
+					BackgroundColor3 = COLORS.Dark,
+					Text = cOpts.Code or "-- code",
+					Font = Enum.Font.Code,
+					TextSize = 12,
+					TextColor3 = Color3.fromRGB(200, 210, 220),
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Top,
+					TextWrapped = true,
+					MultiLine = true,
+					ClearTextOnFocus = false,
+					TextEditable = (cOpts.Editable ~= false),
+				})
+				corner(codeBox, 6)
+				stroke(codeBox, COLORS.RowStroke, 1, 0.3)
+				padding(codeBox, 8, 6, 8, 6)
+				copy.MouseButton1Click:Connect(function()
+					pcall(function()
+						if setclipboard then setclipboard(codeBox.Text) end
+					end)
+					copy.Text = "Copied"
+					task.delay(1, function() pcall(function() copy.Text = "Copy" end) end)
+					if cOpts.Callback then pcall(cOpts.Callback, codeBox.Text) end
+				end)
+				local api = {}
+				function api:Set(t) codeBox.Text = tostring(t) end
+				function api:Get() return codeBox.Text end
+				return api
+			end
+
 			table.insert(self.Pages, Page)
 			table.insert(win._pages, Page)
 			if isFirstPage then
