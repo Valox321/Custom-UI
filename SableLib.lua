@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.30"
+SableLib.Version = "1.31"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -688,10 +688,6 @@ function SableLib:CreateWindow(opts)
 
 	-- cleanup old
 	pcall(function()
-		local old = game:GetService("Lighting"):FindFirstChild("SableBlur")
-		if old then old:Destroy() end
-	end)
-	pcall(function()
 		if CoreGui:FindFirstChild("SableUI") then
 			CoreGui.SableUI:Destroy()
 		end
@@ -720,28 +716,6 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 0.45,
 		BorderSizePixel = 0,
 	})
-	-- Optionaler Blur auf die 3D-Welt (nur wenn noch keiner existiert)
-	local blurOn = opts.Blur ~= false
-	local blurFx, madeBlur = nil, false
-	local function setBlur(on)
-		if not blurOn then return end
-		pcall(function()
-			local lighting = game:GetService("Lighting")
-			if on then
-				if not lighting:FindFirstChild("SableBlur") and not lighting:FindFirstChildOfClass("BlurEffect") then
-					blurFx = Instance.new("BlurEffect")
-					blurFx.Name = "SableBlur"
-					blurFx.Size = 14
-					blurFx.Parent = lighting
-					madeBlur = true
-				end
-			else
-				if madeBlur and blurFx and blurFx.Parent then blurFx:Destroy() end
-				blurFx, madeBlur = nil, false
-			end
-		end)
-	end
-	setBlur(true)
 	local main = create("Frame", {
 		Name = "Main",
 		Parent = gui,
@@ -1135,7 +1109,6 @@ function SableLib:CreateWindow(opts)
 	function Window:Toggle()
 		self._visible = not self._visible
 		gui.Enabled = self._visible
-		setBlur(self._visible)
 	end
 	function Window:SetChip(text)
 		if text and text ~= "" then
@@ -1174,7 +1147,6 @@ function SableLib:CreateWindow(opts)
 		if input.KeyCode == Window._toggleKey then
 			Window._visible = not Window._visible
 			gui.Enabled = Window._visible
-			setBlur(Window._visible)
 		end
 	end)
 
