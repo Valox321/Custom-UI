@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.21"
+SableLib.Version = "1.22"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1309,6 +1309,7 @@ function SableLib:CreateWindow(opts)
 				corner(knob, 10)
 				glossBg(knob)
 				create("UIScale", { Parent = knob, Scale = 1 })
+				end
 
 				if isBox then
 					boxBtn.MouseButton1Click:Connect(function()
@@ -1364,7 +1365,6 @@ function SableLib:CreateWindow(opts)
 						pcall(function() refreshHeader(win) end)
 					end
 				end)
-				end
 
 				end
 
