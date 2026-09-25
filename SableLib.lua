@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.31"
+SableLib.Version = "1.32"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -713,7 +713,7 @@ function SableLib:CreateWindow(opts)
 		Parent = gui,
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.45,
+		BackgroundTransparency = 0.92,
 		BorderSizePixel = 0,
 	})
 	local main = create("Frame", {
