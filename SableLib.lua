@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.33"
+SableLib.Version = "1.34"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -543,19 +543,20 @@ local function create(className, props, children)
 end
 
 local COLORS = {
-	ContentBG  = Color3.fromRGB(13, 15, 36),
-	RowBG      = Color3.fromRGB(22, 24, 54),
-	RowStroke  = Color3.fromRGB(52, 56, 104),
-	PillBG     = Color3.fromRGB(22, 24, 54),
-	PillActive = Color3.fromRGB(124, 106, 255),
-	Text       = Color3.fromRGB(255, 255, 255),
-	Sub        = Color3.fromRGB(141, 143, 168),
-	Beige      = Color3.fromRGB(124, 106, 255),
+	ContentBG  = Color3.fromRGB(11, 13, 34),
+	SidebarBG  = Color3.fromRGB(13, 16, 38),
+	RowBG      = Color3.fromRGB(21, 24, 50),
+	RowStroke  = Color3.fromRGB(37, 42, 80),
+	PillBG     = Color3.fromRGB(21, 24, 50),
+	PillActive = Color3.fromRGB(117, 101, 242),
+	Text       = Color3.fromRGB(241, 241, 250),
+	Sub        = Color3.fromRGB(133, 137, 168),
+	Beige      = Color3.fromRGB(117, 101, 242),
 	BeigeText  = Color3.fromRGB(255, 255, 255),
-	TrackOff   = Color3.fromRGB(33, 35, 66),
+	TrackOff   = Color3.fromRGB(28, 31, 66),
 	Knob       = Color3.fromRGB(255, 255, 255),
-	Dark       = Color3.fromRGB(16, 18, 42),
-	MainBG     = Color3.fromRGB(10, 12, 30),
+	Dark       = Color3.fromRGB(16, 19, 46),
+	MainBG     = Color3.fromRGB(8, 10, 28),
 }
 
 local DEFAULT_COLORS = table.clone(COLORS)
@@ -566,6 +567,7 @@ local THEMES = {
 		RowBG = Color3.fromRGB(13, 15, 30),
 		RowStroke = Color3.fromRGB(36, 40, 80),
 		PillBG = Color3.fromRGB(13, 15, 30),
+		SidebarBG = Color3.fromRGB(6, 8, 18),
 		PillActive = Color3.fromRGB(110, 92, 235),
 		Text = Color3.fromRGB(255, 255, 255),
 		Sub = Color3.fromRGB(135, 137, 160),
@@ -582,6 +584,7 @@ local THEMES = {
 		RowBG = Color3.fromRGB(32, 20, 28),
 		RowStroke = Color3.fromRGB(88, 48, 64),
 		PillBG = Color3.fromRGB(32, 20, 28),
+		SidebarBG = Color3.fromRGB(24, 15, 22),
 		PillActive = Color3.fromRGB(200, 70, 90),
 		Text = Color3.fromRGB(255, 255, 255),
 		Sub = Color3.fromRGB(168, 142, 150),
@@ -614,7 +617,7 @@ local function stroke(parent, color, thickness, transparency)
 	return create("UIStroke", {
 		Color = color or COLORS.RowStroke,
 		Thickness = thickness or 1,
-		Transparency = transparency or 0.35,
+		Transparency = transparency or 0.5,
 		ApplyStrokeMode = Enum.ApplyStrokeMode.Border,
 		Parent = parent,
 	})
@@ -684,7 +687,7 @@ function SableLib:CreateWindow(opts)
 		COLORS.MainBG = opts.Background
 		COLORS.ContentBG = opts.Background
 	end
-	local winTransparency = math.clamp(tonumber(opts.Transparency) or 0, 0, 0.5)
+	local winTransparency = math.clamp(tonumber(opts.Transparency) or 0.07, 0, 0.5)
 
 	-- cleanup old
 	pcall(function()
@@ -710,7 +713,7 @@ function SableLib:CreateWindow(opts)
 	local function autoScale()
 		local cam = workspace.CurrentCamera
 		local vp = (cam and cam.ViewportSize) or Vector2.new(1280, 720)
-		uiScale.Scale = math.clamp(math.min(vp.X / 1150, vp.Y / 750), 0.55, 1)
+		uiScale.Scale = math.clamp(math.min(vp.X / 1090, vp.Y / 700), 0.55, 1)
 	end
 	autoScale()
 	pcall(function()
@@ -731,24 +734,24 @@ function SableLib:CreateWindow(opts)
 		Parent = gui,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 6),
-		Size = opts.Size or UDim2.fromOffset(1000, 640),
+		Size = opts.Size or UDim2.fromOffset(940, 600),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 0.75,
 		BorderSizePixel = 0,
 	})
-	corner(shadow, 16)
+	corner(shadow, 20)
 	local main = create("Frame", {
 		Name = "Main",
 		Parent = gui,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = opts.Size or UDim2.fromOffset(1000, 640),
+		Size = opts.Size or UDim2.fromOffset(940, 600),
 		BackgroundColor3 = COLORS.MainBG,
 		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
 	})
-	corner(main, 14)
-	stroke(main, COLORS.RowStroke, 1, 0.25)
+	corner(main, 18)
+	stroke(main, COLORS.RowStroke, 1, 0.4)
 	padding(main, 10, 10, 10, 10)
 
 	-- BODY: Sidebar links + Content rechts (Referenz-Screenshot)
@@ -769,27 +772,27 @@ function SableLib:CreateWindow(opts)
 	local sidebar = create("Frame", {
 		Name = "Sidebar",
 		Parent = body,
-		Size = UDim2.new(0, 210, 1, 0),
-		BackgroundColor3 = COLORS.ContentBG,
+		Size = UDim2.new(0, 196, 1, 0),
+		BackgroundColor3 = COLORS.SidebarBG,
 		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
 		LayoutOrder = 1,
 	})
 	corner(sidebar, 12)
-	stroke(sidebar, COLORS.RowStroke, 1, 0.3)
-	padding(sidebar, 12, 12, 12, 12)
+	stroke(sidebar, COLORS.RowStroke, 1, 0.45)
+	padding(sidebar, 12, 10, 12, 10)
 
 	local logoRow = create("Frame", {
 		Parent = sidebar,
-		Size = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.new(1, 0, 0, 44),
 		BackgroundTransparency = 1,
 	})
 	-- Custom-Assets (rbxassetid / Asset-ID) in Originalfarben, Lucide in Akzent
 	local logoIsCustom = opts.Icon and (string.find(opts.Icon, "rbxassetid", 1, true) or string.match(opts.Icon, "^%s*%d+%s*$")) and true or false
 	local logoIcon = create("ImageLabel", {
 		Parent = logoRow,
-		Size = UDim2.fromOffset(24, 24),
-		Position = UDim2.new(0, 2, 0, 4),
+		Size = UDim2.fromOffset(22, 22),
+		Position = UDim2.new(0, 2, 0, 2),
 		BackgroundTransparency = 1,
 		Image = SableLib:ResolveIcon(opts.Icon or "crown") or "",
 		ImageColor3 = logoIsCustom and Color3.fromRGB(255, 255, 255) or COLORS.Beige,
@@ -797,11 +800,11 @@ function SableLib:CreateWindow(opts)
 	local logoName = create("TextLabel", {
 		Parent = logoRow,
 		Position = UDim2.new(0, 32, 0, 0),
-		Size = UDim2.new(1, -32, 0, 30),
+		Size = UDim2.new(1, -32, 0, 26),
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = TitleFont,
-		TextSize = 22,
+		TextSize = 20,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -809,12 +812,12 @@ function SableLib:CreateWindow(opts)
 	fancyTitle(logoName, winName)
 	create("TextLabel", {
 		Parent = logoRow,
-		Position = UDim2.new(0, 32, 0, 28),
-		Size = UDim2.new(1, -32, 0, 14),
+		Position = UDim2.new(0, 32, 0, 27),
+		Size = UDim2.new(1, -32, 0, 11),
 		BackgroundTransparency = 1,
 		Text = string.upper(winVersion),
 		Font = Enum.Font.GothamMedium,
-		TextSize = 10,
+		TextSize = 9,
 		TextColor3 = COLORS.Sub,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -823,8 +826,8 @@ function SableLib:CreateWindow(opts)
 	local sideScroll = create("ScrollingFrame", {
 		Name = "SideList",
 		Parent = sidebar,
-		Position = UDim2.new(0, 0, 0, 56),
-		Size = UDim2.new(1, 0, 1, -56),
+		Position = UDim2.new(0, 0, 0, 52),
+		Size = UDim2.new(1, 0, 1, -52),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
@@ -835,20 +838,20 @@ function SableLib:CreateWindow(opts)
 	create("UIListLayout", {
 		Parent = sideScroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 4),
+		Padding = UDim.new(0, 2),
 	})
 
 	-- CONTENT
 	local content = create("Frame", {
 		Name = "Content",
 		Parent = body,
-		Size = UDim2.new(1, -222, 1, 0),
+		Size = UDim2.new(1, -206, 1, 0),
 		BackgroundTransparency = 1,
 		LayoutOrder = 2,
 	})
 	local header = create("Frame", {
 		Parent = content,
-		Size = UDim2.new(1, 0, 0, 80),
+		Size = UDim2.new(1, 0, 0, 74),
 		BackgroundTransparency = 1,
 	})
 	local headerTitle = create("TextLabel", {
@@ -857,7 +860,7 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = TitleFont,
-		TextSize = 22,
+		TextSize = 24,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -865,12 +868,11 @@ function SableLib:CreateWindow(opts)
 	fancyTitle(headerTitle, winName)
 	local headerSub = create("TextLabel", {
 		Parent = header,
-		Position = UDim2.new(0, 0, 0, 32),
-		Size = UDim2.new(1, -280, 0, 16),
+		Size = UDim2.new(1, -260, 0, 14),
 		BackgroundTransparency = 1,
 		Text = "",
 		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
+		TextSize = 11,
 		TextColor3 = COLORS.Sub,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
@@ -878,7 +880,7 @@ function SableLib:CreateWindow(opts)
 		Parent = header,
 		AnchorPoint = Vector2.new(1, 0),
 		Position = UDim2.new(1, 0, 0, 4),
-		Size = UDim2.new(0, 260, 0, 32),
+		Size = UDim2.new(0, 240, 0, 30),
 		BackgroundColor3 = COLORS.ContentBG,
 		BorderSizePixel = 0,
 	})
@@ -909,8 +911,8 @@ function SableLib:CreateWindow(opts)
 	})
 	local backBtn = create("TextButton", {
 		Parent = header,
-		Position = UDim2.new(0, 0, 0, 52),
-		Size = UDim2.fromOffset(72, 22),
+		Position = UDim2.new(0, 0, 0, 48),
+		Size = UDim2.fromOffset(64, 20),
 		BackgroundTransparency = 1,
 		Text = "",
 		AutoButtonColor = false,
@@ -920,27 +922,27 @@ function SableLib:CreateWindow(opts)
 	create("ImageLabel", {
 		Parent = backBtn,
 		AnchorPoint = Vector2.new(0, 0.5),
-		Position = UDim2.new(0, 10, 0.5, 0),
-		Size = UDim2.fromOffset(14, 14),
+		Position = UDim2.new(0, 8, 0.5, 0),
+		Size = UDim2.fromOffset(12, 12),
 		BackgroundTransparency = 1,
 		Image = SableLib:ResolveIcon("chevron-left") or "",
 		ImageColor3 = COLORS.Sub,
 	})
 	create("TextLabel", {
 		Parent = backBtn,
-		Position = UDim2.new(0, 28, 0, 0),
-		Size = UDim2.new(1, -36, 1, 0),
+		Position = UDim2.new(0, 24, 0, 0),
+		Size = UDim2.new(1, -30, 1, 0),
 		BackgroundTransparency = 1,
 		Text = "Back",
 		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
+		TextSize = 12,
 		TextColor3 = COLORS.Sub,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
 	local chipBtn = create("TextButton", {
 		Parent = header,
-		Position = UDim2.new(0, 80, 0, 52),
-		Size = UDim2.fromOffset(104, 22),
+		Position = UDim2.new(0, 72, 0, 48),
+		Size = UDim2.fromOffset(96, 20),
 		BackgroundTransparency = 1,
 		Visible = false,
 		Text = "",
@@ -954,21 +956,21 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Text = "",
 		Font = Enum.Font.GothamMedium,
-		TextSize = 12,
+		TextSize = 11,
 		TextColor3 = COLORS.Sub,
 	})
 	local viewBar = create("Frame", {
 		Parent = header,
 		AnchorPoint = Vector2.new(1, 0),
-		Position = UDim2.new(1, 0, 0, 52),
-		Size = UDim2.fromOffset(68, 22),
+		Position = UDim2.new(1, 0, 0, 48),
+		Size = UDim2.fromOffset(64, 20),
 		BackgroundTransparency = 1,
 	})
 	local function viewBtn(icon, x)
 		local b = create("TextButton", {
 			Parent = viewBar,
 			Position = UDim2.new(0, x, 0, 0),
-			Size = UDim2.fromOffset(30, 22),
+			Size = UDim2.fromOffset(28, 20),
 			BackgroundColor3 = COLORS.PillActive,
 			BackgroundTransparency = 1,
 			Text = "",
@@ -979,7 +981,7 @@ function SableLib:CreateWindow(opts)
 			Parent = b,
 			AnchorPoint = Vector2.new(0.5, 0.5),
 			Position = UDim2.new(0.5, 0, 0.5, 0),
-			Size = UDim2.fromOffset(15, 15),
+			Size = UDim2.fromOffset(14, 14),
 			BackgroundTransparency = 1,
 			Image = SableLib:ResolveIcon(icon) or "",
 			ImageColor3 = COLORS.Sub,
@@ -987,12 +989,12 @@ function SableLib:CreateWindow(opts)
 		return b, il
 	end
 	local listBtn, listIco = viewBtn("list", 0)
-	local gridBtn, gridIco = viewBtn("layout-grid", 38)
+	local gridBtn, gridIco = viewBtn("layout-grid", 36)
 	local card = create("Frame", {
 		Name = "Card",
 		Parent = content,
-		Position = UDim2.new(0, 0, 0, 88),
-		Size = UDim2.new(1, 0, 1, -88),
+		Position = UDim2.new(0, 0, 0, 82),
+		Size = UDim2.new(1, 0, 1, -82),
 		BackgroundColor3 = COLORS.RowBG,
 		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
@@ -1015,13 +1017,13 @@ function SableLib:CreateWindow(opts)
 	local listLayout = create("UIListLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 10),
+		Padding = UDim.new(0, 8),
 	})
 	local gridLayout = create("UIGridLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		CellPadding = UDim2.new(0, 10, 0, 10),
-		CellSize = UDim2.new(0.5, -5, 0, 120),
+		CellPadding = UDim2.new(0, 8, 0, 8),
+		CellSize = UDim2.new(0.5, -4, 0, 110),
 		Enabled = false,
 	})
 	local emptyLabel = create("TextLabel", {
@@ -1280,7 +1282,7 @@ function SableLib:CreateWindow(opts)
 		win._sideOrder = win._sideOrder + 1
 		create("TextLabel", {
 			Parent = win._sideList,
-			Size = UDim2.new(1, 0, 0, 24),
+			Size = UDim2.new(1, 0, 0, 20),
 			BackgroundTransparency = 1,
 			Text = "  " .. string.upper(group),
 			Font = Enum.Font.GothamMedium,
@@ -1505,7 +1507,7 @@ function SableLib:CreateWindow(opts)
 				if isCard then
 					corner(row, 12)
 					stroke(row, COLORS.RowStroke, 1, 0.3)
-					padding(row, 14, 12, 14, 12)
+					padding(row, 16, 10, 16, 10)
 					row.MouseEnter:Connect(function()
 						local c = COLORS.RowBG
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = Color3.new(math.min(c.R + 0.035, 1), math.min(c.G + 0.035, 1), math.min(c.B + 0.035, 1)) }):Play()
@@ -1534,7 +1536,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddToggle(tOpts)
-				local row = baseRow(78)
+				local row = baseRow(70)
 				local title = create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -90, 0, 24),
@@ -1704,7 +1706,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddButton(bOpts)
-				local row = baseRow(72)
+				local row = baseRow(64)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -140, 0, 22),
@@ -1751,7 +1753,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddDropdown(dOpts)
-				local row = baseRow(72)
+				local row = baseRow(64)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -220, 0, 22),
@@ -1877,7 +1879,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddLabel(lOpts)
-				local row = baseRow(64, false)
+				local row = baseRow(56, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(0.5, 0, 0, 22),
@@ -1923,7 +1925,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddSlider(sOpts)
-				local row = baseRow(78)
+				local row = baseRow(70)
 				local min = sOpts.Min or 0
 				local max = sOpts.Max or 100
 				local val = sOpts.Default or 50
@@ -1998,7 +2000,7 @@ function SableLib:CreateWindow(opts)
 
 			-- Range-Slider (Screenshot "Delay": zwei Knobs + Werte-Box rechts)
 			function Page:AddRangeSlider(rOpts)
-				local row = baseRow(78)
+				local row = baseRow(70)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -270, 0, 22),
@@ -2200,7 +2202,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddParagraph(pOpts)
-				local row = baseRow(84, false)
+				local row = baseRow(76, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, 0, 0, 22),
@@ -2230,7 +2232,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddInput(iOpts)
-				local row = baseRow(72)
+				local row = baseRow(64)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -220, 0, 22),
@@ -2285,7 +2287,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddKeybind(kOpts)
-				local row = baseRow(72)
+				local row = baseRow(64)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -150, 0, 22),
@@ -2360,7 +2362,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddColorpicker(cOpts)
-				local row = baseRow(72)
+				local row = baseRow(64)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -110, 0, 22),
@@ -2732,7 +2734,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddCode(cOpts)
-				local row = baseRow(120, false)
+				local row = baseRow(108, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -80, 0, 22),
