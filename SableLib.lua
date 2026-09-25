@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.23"
+SableLib.Version = "1.24"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -709,7 +709,7 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = TitleFont,
-		TextSize = 17,
+		TextSize = 19,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -765,7 +765,7 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = TitleFont,
-		TextSize = 24,
+		TextSize = 28,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
