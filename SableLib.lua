@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.44"
+SableLib.Version = "1.45"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1310,6 +1310,57 @@ function SableLib:CreateWindow(opts)
 			self._logoIcon.ImageColor3 = (custom and Color3.fromRGB(255, 255, 255)) or COLORS.Beige
 		end
 	end
+	function Window:ShowLoading(text)
+		if self._loader then pcall(function() self._loader:Destroy() end) end
+		local ov = create("Frame", {
+			Parent = container,
+			Size = UDim2.new(1, 0, 1, 0),
+			BackgroundColor3 = COLORS.MainBG,
+			BackgroundTransparency = 0.05,
+			BorderSizePixel = 0,
+			ZIndex = 90,
+		})
+		corner(ov, 18)
+		local spin = create("ImageLabel", {
+			Parent = ov,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, -14),
+			Size = UDim2.fromOffset(28, 28),
+			BackgroundTransparency = 1,
+			Image = SableLib:ResolveIcon("loader-circle") or "",
+			ImageColor3 = COLORS.Beige,
+			ZIndex = 91,
+		})
+		create("TextLabel", {
+			Parent = ov,
+			AnchorPoint = Vector2.new(0.5, 0),
+			Position = UDim2.new(0.5, 0, 0.5, 8),
+			Size = UDim2.new(1, -40, 0, 22),
+			BackgroundTransparency = 1,
+			Text = tostring(text or "Loading..."),
+			Font = Enum.Font.GothamBold,
+			TextSize = 15,
+			TextColor3 = COLORS.Text,
+			TextXAlignment = Enum.TextXAlignment.Center,
+			ZIndex = 91,
+		})
+		self._loader = ov
+		self._loading = true
+		task.spawn(function()
+			local deg = 0
+				while self._loader == ov and ov.Parent do
+					deg = (deg + 8) % 360
+					spin.Rotation = deg
+					task.wait(0.03)
+				end
+		end)
+	end
+	function Window:HideLoading()
+		self._loading = false
+		if self._loader then pcall(function() self._loader:Destroy() end) end
+		self._loader = nil
+	end
+	function Window:IsLoading() return self._loading == true end
 	Window._popups = {}
 	local function closeAllPopups(win)
 		for _, c in ipairs(win._popups) do
@@ -2086,7 +2137,20 @@ function SableLib:CreateWindow(opts)
 				})
 
 				local options = dOpts.Options or { "Option 1" }
-				local current = dOpts.Default or options[1]
+				local multi = dOpts.Multi == true
+				local current = multi and {} or (dOpts.Default or options[1])
+				if multi then
+					for _, v in ipairs(dOpts.Default or {}) do
+						if table.find(options, v) then table.insert(current, v) end
+					end
+				end
+				local function selText()
+					if multi then
+						if #current == 0 then return "None" end
+						return table.concat(current, ", ")
+					end
+					return tostring(current)
+				end
 
 				local box = create("TextButton", {
 					Parent = row,
@@ -2107,7 +2171,7 @@ function SableLib:CreateWindow(opts)
 					Size = UDim2.new(1, -36, 1, 0),
 					Position = UDim2.new(0, 14, 0, 0),
 					BackgroundTransparency = 1,
-					Text = tostring(current),
+					Text = selText(),
 					Font = Enum.Font.GothamMedium,
 					TextSize = 14,
 					TextColor3 = COLORS.Text,
@@ -2174,7 +2238,7 @@ function SableLib:CreateWindow(opts)
 						local ob = create("TextButton", {
 							Parent = listFrame,
 							Size = UDim2.new(1, 0, 0, 36),
-							BackgroundColor3 = (opt == current) and COLORS.PillActive or COLORS.PillBG,
+							BackgroundColor3 = (((multi and table.find(current, opt)) or (not multi and opt == current)) and COLORS.PillActive) or COLORS.PillBG,
 							Text = "  " .. tostring(opt),
 							Font = Enum.Font.GothamMedium,
 							TextSize = 14,
@@ -2191,16 +2255,47 @@ function SableLib:CreateWindow(opts)
 						tw(ob, Motion.HoverDuration, { BackgroundTransparency = 0 })
 					end)
 						ob.MouseButton1Click:Connect(function()
-							current = opt
-							label.Text = tostring(opt)
-							closeList()
-							if dOpts.Callback then
-								pcall(dOpts.Callback, opt)
+							if multi then
+								local at = table.find(current, opt)
+								if at then table.remove(current, at)
+								else table.insert(current, opt) end
+								ob.BackgroundColor3 = (table.find(current, opt) and COLORS.PillActive) or COLORS.PillBG
+								label.Text = selText()
+								if dOpts.Callback then
+									pcall(dOpts.Callback, table.clone(current))
+								end
+							else
+								current = opt
+								label.Text = tostring(opt)
+								closeList()
+								if dOpts.Callback then
+									pcall(dOpts.Callback, opt)
+								end
 							end
 						end)
 					end
 				end)
-				return Page
+				local api = {}
+				function api:Get()
+					if multi then return table.clone(current) end
+					return current
+				end
+				function api:Set(v)
+					if multi then
+						current = {}
+						for _, x in ipairs(v or {}) do
+							if table.find(options, x) and not table.find(current, x) then table.insert(current, x) end
+						end
+					else
+						current = v
+					end
+					label.Text = selText()
+					if dOpts.Callback then pcall(dOpts.Callback, api:Get()) end
+				end
+				function api:SetOptions(n)
+					options = n or {}
+				end
+				return api
 			end
 
 			function Page:AddLabel(lOpts)
@@ -2833,7 +2928,7 @@ function SableLib:CreateWindow(opts)
 						Parent = main,
 						AnchorPoint = Vector2.new(0.5, 0.5),
 						Position = UDim2.new(0.5, 0, 0.5, 0),
-						Size = UDim2.fromOffset(350, 312),
+						Size = UDim2.fromOffset(400, 314),
 						BackgroundColor3 = Color3.fromRGB(22, 24, 33),
 						BorderSizePixel = 0,
 						ZIndex = 60,
@@ -2849,7 +2944,7 @@ function SableLib:CreateWindow(opts)
 						Position = UDim2.new(0, 16, 0, 12),
 						Size = UDim2.new(1, -32, 0, 22),
 						BackgroundTransparency = 1,
-						Text = cOpts.Name or "Colorpicker",
+						Text = cOpts.Name or "Pick a color",
 						Font = Enum.Font.GothamBold,
 						TextSize = 16,
 						TextColor3 = COLORS.Text,
@@ -2861,7 +2956,7 @@ function SableLib:CreateWindow(opts)
 					local svBox = create("TextButton", {
 						Parent = pop,
 						Position = UDim2.new(0, 16, 0, 44),
-						Size = UDim2.fromOffset(232, 180),
+						Size = UDim2.fromOffset(210, 180),
 						BackgroundColor3 = Color3.fromHSV(h, 1, 1),
 						Text = "",
 						AutoButtonColor = false,
@@ -2915,8 +3010,8 @@ function SableLib:CreateWindow(opts)
 					-- Hue bar
 					local hueBar = create("TextButton", {
 						Parent = pop,
-						Position = UDim2.new(0, 256, 0, 44),
-						Size = UDim2.fromOffset(16, 180),
+						Position = UDim2.new(0, 234, 0, 44),
+						Size = UDim2.fromOffset(14, 180),
 						BackgroundColor3 = Color3.fromRGB(255, 255, 255),
 						Text = "",
 						AutoButtonColor = false,
@@ -2939,43 +3034,28 @@ function SableLib:CreateWindow(opts)
 					local hueDot = create("Frame", {
 						Parent = hueBar,
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						Size = UDim2.fromOffset(22, 10),
+						Size = UDim2.fromOffset(16, 16),
 						BackgroundTransparency = 1,
 						BorderSizePixel = 0,
 						ZIndex = 64,
 					})
-					corner(hueDot, 5)
+					corner(hueDot, 8)
 					stroke(hueDot, Color3.fromRGB(255, 255, 255), 2, 0)
 
-					-- Alpha-Slider mit Checkerboard (wie Referenz)
-					local alpha = cOpts.Alpha or 0
+					-- Alpha-Streifen vertikal (wie Referenz)
+					local alpha = cOpts.Alpha
+					if alpha == nil then alpha = 1 end
+					alpha = math.clamp(alpha, 0, 1)
 					local alphaBar = create("TextButton", {
 						Parent = pop,
-						Position = UDim2.new(0, 16, 0, 232),
-						Size = UDim2.fromOffset(318, 20),
-						BackgroundColor3 = Color3.fromRGB(200, 200, 208),
+						Position = UDim2.new(0, 254, 0, 44),
+						Size = UDim2.fromOffset(10, 180),
+						BackgroundColor3 = Color3.fromRGB(20, 20, 26),
 						Text = "",
 						AutoButtonColor = false,
-						ClipsDescendants = true,
 						ZIndex = 61,
 					})
-					corner(alphaBar, 10)
-					do
-						local tw, th = 318 / 32, 10
-						for ix = 0, 31 do
-							for iy = 0, 1 do
-								if (ix + iy) % 2 == 0 then
-									create("Frame", {
-										Parent = alphaBar,
-										Position = UDim2.new(0, ix * tw, 0, iy * th),
-										Size = UDim2.new(0, tw + 1, 0, th + 1),
-										BackgroundColor3 = Color3.fromRGB(140, 140, 152),
-										BorderSizePixel = 0,
-									})
-								end
-							end
-						end
-					end
+					corner(alphaBar, 5)
 					local alphaFill = create("Frame", {
 						Parent = alphaBar,
 						Size = UDim2.new(1, 0, 1, 0),
@@ -2984,7 +3064,7 @@ function SableLib:CreateWindow(opts)
 					})
 					create("UIGradient", {
 						Parent = alphaFill,
-						Rotation = 0,
+						Rotation = 90,
 						Transparency = NumberSequence.new({
 							NumberSequenceKeypoint.new(0, 0),
 							NumberSequenceKeypoint.new(1, 1),
@@ -2993,43 +3073,108 @@ function SableLib:CreateWindow(opts)
 					local alphaKnob = create("Frame", {
 						Parent = alphaBar,
 						AnchorPoint = Vector2.new(0.5, 0.5),
-						Size = UDim2.fromOffset(12, 22),
-						BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+						Size = UDim2.fromOffset(14, 14),
+						BackgroundTransparency = 1,
 						BorderSizePixel = 0,
 						ZIndex = 62,
 					})
-					corner(alphaKnob, 6)
+					corner(alphaKnob, 7)
+					stroke(alphaKnob, Color3.fromRGB(255, 255, 255), 2, 0)
 
-					-- Vorschau-Swatch + Hex (wie Referenz)
-					local swatch = create("Frame", {
+					-- Felder rechts: Hex / Red / Green / Blue / Alpha
+					local function makeField(y, initial, tag)
+						local holder = create("Frame", {
+							Parent = pop,
+							Position = UDim2.new(0, 272, 0, y),
+							Size = UDim2.new(0, 112, 0, 30),
+							BackgroundColor3 = COLORS.Dark,
+							BorderSizePixel = 0,
+							ZIndex = 61,
+						})
+						corner(holder, 8)
+						local tb = create("TextBox", {
+							Parent = holder,
+							Position = UDim2.new(0, 10, 0, 0),
+							Size = UDim2.new(1, -52, 1, 0),
+							BackgroundTransparency = 1,
+							Text = initial,
+							Font = Enum.Font.GothamMedium,
+							TextSize = 12,
+							TextColor3 = COLORS.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							ClearTextOnFocus = false,
+							ZIndex = 62,
+						})
+						create("TextLabel", {
+							Parent = holder,
+							AnchorPoint = Vector2.new(1, 0.5),
+							Position = UDim2.new(1, -8, 0.5, 0),
+							Size = UDim2.fromOffset(40, 16),
+							BackgroundTransparency = 1,
+							Text = tag,
+							Font = Enum.Font.Gotham,
+							TextSize = 11,
+							TextColor3 = COLORS.Sub,
+							TextXAlignment = Enum.TextXAlignment.Right,
+							ZIndex = 62,
+						})
+						return tb
+					end
+					local hexBox = makeField(44, toHex(cur), "Hex")
+					local rBox = makeField(80, tostring(math.floor(cur.R * 255 + 0.5)), "Red")
+					local gBox = makeField(116, tostring(math.floor(cur.G * 255 + 0.5)), "Green")
+					local bBox = makeField(152, tostring(math.floor(cur.B * 255 + 0.5)), "Blue")
+					local aBox = makeField(188, tostring(math.floor(alpha * 100 + 0.5)) .. "%", "Alpha")
+
+					-- Vorschau alt/neu + Abbrechen/Apply (wie Referenz)
+					local oldPrev = create("Frame", {
 						Parent = pop,
-						Position = UDim2.new(0, 16, 0, 260),
-						Size = UDim2.fromOffset(36, 36),
+						Position = UDim2.new(0, 16, 0, 232),
+						Size = UDim2.new(0, 172, 0, 22),
+						BackgroundColor3 = col,
+						BorderSizePixel = 0,
+						ZIndex = 61,
+					})
+					corner(oldPrev, 7)
+					local newPrev = create("Frame", {
+						Parent = pop,
+						Position = UDim2.new(0, 196, 0, 232),
+						Size = UDim2.new(0, 172, 0, 22),
 						BackgroundColor3 = cur,
 						BorderSizePixel = 0,
 						ZIndex = 61,
 					})
-					corner(swatch, 8)
-					stroke(swatch, COLORS.RowStroke, 1, 0.2)
-					local hexBox = create("TextBox", {
+					corner(newPrev, 7)
+					local cancelBtn = create("TextButton", {
 						Parent = pop,
-						Position = UDim2.new(0, 60, 0, 260),
-						Size = UDim2.new(1, -76, 0, 36),
+						Position = UDim2.new(0, 16, 0, 262),
+						Size = UDim2.new(0, 180, 0, 36),
 						BackgroundColor3 = COLORS.Dark,
-						Text = toHex(cur),
-						PlaceholderText = "#RRGGBB",
-						Font = Enum.Font.GothamMedium,
+						Text = "Abbrechen",
+						Font = Enum.Font.GothamBold,
 						TextSize = 13,
 						TextColor3 = COLORS.Text,
-						PlaceholderColor3 = COLORS.Sub,
-						TextXAlignment = Enum.TextXAlignment.Left,
-						ClearTextOnFocus = false,
+						AutoButtonColor = false,
 						ZIndex = 61,
 					})
-					corner(hexBox, 8)
-					stroke(hexBox, COLORS.RowStroke, 1, 0.2)
-					padding(hexBox, 12, 0, 0, 0)
-					pop.Size = UDim2.fromOffset(350, 312)
+					corner(cancelBtn, 10)
+					pressify(cancelBtn)
+					local applyBtn = create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0, 204, 0, 262),
+						Size = UDim2.new(0, 180, 0, 36),
+						BackgroundColor3 = COLORS.PillActive,
+						BackgroundTransparency = 0.15,
+						Text = "Apply",
+						Font = Enum.Font.GothamBold,
+						TextSize = 13,
+						TextColor3 = COLORS.Text,
+						AutoButtonColor = false,
+						ZIndex = 61,
+					})
+					corner(applyBtn, 10)
+					pressify(applyBtn)
+					pop.Size = UDim2.fromOffset(400, 314)
 
 					local function refresh()
 						syncing = true
@@ -3037,17 +3182,14 @@ function SableLib:CreateWindow(opts)
 						svDot.Position = UDim2.new(s, 0, 1 - v, 0)
 						hueDot.Position = UDim2.new(0.5, 0, h, 0)
 						alphaFill.BackgroundColor3 = cur
-						alphaKnob.Position = UDim2.new(alpha, 0, 0.5, 0)
-						swatch.BackgroundColor3 = cur
-						hexBox.Text = toHex(cur)
+						alphaKnob.Position = UDim2.new(0.5, 0, 1 - alpha)
+						newPrev.BackgroundColor3 = cur
+												hexBox.Text = toHex(cur)
+												rBox.Text = tostring(math.floor(cur.R * 255 + 0.5))
+												gBox.Text = tostring(math.floor(cur.G * 255 + 0.5))
+												bBox.Text = tostring(math.floor(cur.B * 255 + 0.5))
+												aBox.Text = tostring(math.floor(alpha * 100 + 0.5)) .. "%"
 						syncing = false
-					end
-					local function commit(fire)
-						col = cur
-						preview.BackgroundColor3 = col
-						if fire and cOpts.Callback then
-							pcall(cOpts.Callback, col, alpha)
-						end
 					end
 					refresh()
 
@@ -3055,9 +3197,8 @@ function SableLib:CreateWindow(opts)
 					local function setAlpha(pos)
 						local ap = alphaBar.AbsolutePosition
 						local as = alphaBar.AbsoluteSize
-						alpha = math.clamp((pos.X - ap.X) / math.max(1, as.X), 0, 1)
+						alpha = 1 - math.clamp((pos.Y - ap.Y) / math.max(1, as.Y), 0, 1)
 						refresh()
-						commit(true)
 					end
 					local function setSV(pos)
 						local ap = svBox.AbsolutePosition
@@ -3066,7 +3207,6 @@ function SableLib:CreateWindow(opts)
 						v = 1 - math.clamp((pos.Y - ap.Y) / math.max(1, as.Y), 0, 1)
 						cur = Color3.fromHSV(h, s, v)
 						refresh()
-						commit(true)
 					end
 					local function setH(pos)
 						local ap = hueBar.AbsolutePosition
@@ -3074,7 +3214,6 @@ function SableLib:CreateWindow(opts)
 						h = math.clamp((pos.Y - ap.Y) / math.max(1, as.Y), 0, 1)
 						cur = Color3.fromHSV(h, s, v)
 						refresh()
-						commit(true)
 					end
 					svBox.InputBegan:Connect(function(i)
 						if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
@@ -3107,12 +3246,41 @@ function SableLib:CreateWindow(opts)
 						local c = fromHex(hexBox.Text)
 						if c then
 							h, s, v = c:ToHSV() cur = c refresh()
-							commit(true)
 						else
 							hexBox.Text = toHex(cur)
 						end
 					end)
 				end)
+					local function bindNum(box, fn)
+						box.FocusLost:Connect(function(enter)
+						if not enter or syncing then return end
+						fn(box.Text)
+						refresh()
+						end)
+					end
+					bindNum(rBox, function(txt)
+						local r = math.clamp(tonumber(txt) or (cur.R * 255), 0, 255)
+						cur = Color3.fromRGB(r, cur.G * 255, cur.B * 255) h, s, v = cur:ToHSV()
+					end)
+					bindNum(gBox, function(txt)
+						local g = math.clamp(tonumber(txt) or (cur.G * 255), 0, 255)
+						cur = Color3.fromRGB(cur.R * 255, g, cur.B * 255) h, s, v = cur:ToHSV()
+					end)
+					bindNum(bBox, function(txt)
+						local b = math.clamp(tonumber(txt) or (cur.B * 255), 0, 255)
+						cur = Color3.fromRGB(cur.R * 255, cur.G * 255, b) h, s, v = cur:ToHSV()
+					end)
+					bindNum(aBox, function(txt)
+						local p = tonumber(string.gsub(txt or "", "%%", ""))
+						if p then alpha = math.clamp(p / 100, 0, 1) end
+					end)
+					cancelBtn.MouseButton1Click:Connect(function() closePop() end)
+					applyBtn.MouseButton1Click:Connect(function()
+						col = cur
+						preview.BackgroundColor3 = col
+						if cOpts.Callback then pcall(cOpts.Callback, col, alpha) end
+						closePop()
+					end)
 				local api = {}
 				function api:Set(c) col = c preview.BackgroundColor3 = c end
 				function api:Get() return col end
