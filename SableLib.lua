@@ -247,11 +247,11 @@ function SableLib:CreateWindow(opts)
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	})
-	padding(scroll, 8, 8, 8, 8)
+	padding(scroll, 0, 6, 0, 6)
 	create("UIListLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 6),
+		Padding = UDim.new(0, 0),
 	})
 
 	-- BOTTOM NAV (logo links fix, tabs rechts scrollbar für viele Feature-Tabs)
@@ -319,6 +319,42 @@ function SableLib:CreateWindow(opts)
 	function Window:Toggle()
 		self._visible = not self._visible
 		gui.Enabled = self._visible
+	end
+	-- runder Icon-Button links in der TopBar wie im Bild (z.B. "headphones")
+	function Window:SetTopIcon(iconName)
+		if self._topIconBtn then
+			pcall(function() self._topIconBtn:Destroy() end)
+			self._topIconBtn = nil
+		end
+		local btn = create("TextButton", {
+			Parent = topBar,
+			Size = UDim2.fromOffset(38, 38),
+			BackgroundColor3 = COLORS.PillBG,
+			BorderSizePixel = 0,
+			AutoButtonColor = false,
+			Text = "",
+			LayoutOrder = -100,
+		})
+		corner(btn, 19)
+		stroke(btn, COLORS.RowStroke, 1, 0.3)
+		local img, rs, ro = SableLib:ResolveIcon(iconName or "headphones")
+		if img then
+			local il = create("ImageLabel", {
+				Parent = btn,
+				AnchorPoint = Vector2.new(0.5, 0.5),
+				Position = UDim2.new(0.5, 0, 0.5, 0),
+				Size = UDim2.fromOffset(18, 18),
+				BackgroundTransparency = 1,
+				Image = img,
+				ImageColor3 = COLORS.Text,
+			})
+			if rs and rs.X > 0 then
+				il.ImageRectSize = rs
+				il.ImageRectOffset = ro or Vector2.new(0, 0)
+			end
+		end
+		self._topIconBtn = btn
+		return btn
 	end
 	Window._popups = {}
 	local function closeAllPopups(win)
@@ -437,7 +473,7 @@ function SableLib:CreateWindow(opts)
 			ClipsDescendants = true,
 			LayoutOrder = #self._tabs + 1,
 		})
-		corner(pill, 20)
+		corner(pill, iconOnly and 13 or 20)
 		stroke(pill, COLORS.RowStroke, 1, 0.3)
 		buildPillContent(pill, icon, tabName, iconOnly)
 		stylePill(pill, isActive)
@@ -535,18 +571,25 @@ function SableLib:CreateWindow(opts)
 
 			topPill.MouseButton1Click:Connect(selectPage)
 
-			-- ROW BUILDERS -------------------------------------------------
+			-- ROWS wie im Bild: eine durchgehende Card, Rows transparent mit Trennlinie
 			local function baseRow(height)
 				local row = create("Frame", {
 					Parent = win._scroll,
 					Size = UDim2.new(1, 0, 0, height or 64),
-					BackgroundColor3 = COLORS.RowBG,
+					BackgroundTransparency = 1,
 					BorderSizePixel = 0,
 					Visible = (win._currentPage == Page),
 				})
-				corner(row, 10)
-				stroke(row, COLORS.RowStroke, 1, 0.4)
 				padding(row, 14, 10, 14, 10)
+				create("Frame", {
+					Parent = row,
+					AnchorPoint = Vector2.new(0, 1),
+					Position = UDim2.new(0, -14, 1, 0),
+					Size = UDim2.new(1, 28, 0, 1),
+					BackgroundColor3 = COLORS.RowStroke,
+					BackgroundTransparency = 0.35,
+					BorderSizePixel = 0,
+				})
 				table.insert(Page.Rows, row)
 				return row
 			end
@@ -1186,9 +1229,11 @@ function SableLib:CreateWindow(opts)
 
 				local open = false
 				local pop = nil
+				local backdrop = nil
 				local function closePop()
 					open = false
 					if pop then pop:Destroy() pop = nil end
+					if backdrop then backdrop:Destroy() backdrop = nil end
 				end
 				table.insert(win._popups, closePop)
 
@@ -1201,22 +1246,31 @@ function SableLib:CreateWindow(opts)
 					local cur = col
 					local syncing = false
 
+					-- abgedunkelter Hintergrund + Popup mittig in der UI
+					backdrop = create("TextButton", {
+						Parent = main,
+						Position = UDim2.new(0, 0, 0, 0),
+						Size = UDim2.new(1, 0, 1, 0),
+						BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+						BackgroundTransparency = 0.45,
+						Text = "",
+						AutoButtonColor = false,
+						ZIndex = 59,
+					})
+					corner(backdrop, 12)
+					backdrop.MouseButton1Click:Connect(function() closePop() end)
+
 					pop = create("Frame", {
 						Parent = main,
-						Size = UDim2.fromOffset(350, 372),
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Position = UDim2.new(0.5, 0, 0.5, 0),
+						Size = UDim2.fromOffset(350, 318),
 						BackgroundColor3 = Color3.fromRGB(22, 24, 33),
 						BorderSizePixel = 0,
 						ZIndex = 60,
 					})
 					corner(pop, 16)
 					stroke(pop, COLORS.RowStroke, 1, 0.1)
-					-- relativ zum Main, damit das Popup beim Draggen mitwandert
-					local pp = preview.AbsolutePosition
-					local mPos = main.AbsolutePosition
-					local mSize = main.AbsoluteSize
-					local rx = math.clamp(pp.X - mPos.X - 180, 8, math.max(8, mSize.X - 358))
-					local ry = math.clamp(pp.Y - mPos.Y - 40, 46, math.max(50, mSize.Y - 200))
-					pop.Position = UDim2.fromOffset(rx, ry)
 
 					create("TextLabel", {
 						Parent = pop,
