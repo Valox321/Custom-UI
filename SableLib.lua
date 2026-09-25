@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.13-lucide"
+SableLib.Version = "1.14-shot"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -467,6 +467,7 @@ local IconAliases = {
 	["+"] = "plus",
 	mace = "hammer",
 	spear = "sword",
+	movement = "footprints",
 }
 
 -- gibt image, rectSize, rectOffset zurueck (oder nil)
@@ -516,18 +517,18 @@ local function create(className, props, children)
 end
 
 local COLORS = {
-	ContentBG  = Color3.fromRGB(16, 17, 22),
-	RowBG      = Color3.fromRGB(24, 25, 32),
-	RowStroke  = Color3.fromRGB(38, 39, 47),
-	PillBG     = Color3.fromRGB(24, 25, 32),
-	PillActive = Color3.fromRGB(33, 34, 44),
+	ContentBG  = Color3.fromRGB(13, 15, 36),
+	RowBG      = Color3.fromRGB(22, 24, 54),
+	RowStroke  = Color3.fromRGB(52, 56, 104),
+	PillBG     = Color3.fromRGB(22, 24, 54),
+	PillActive = Color3.fromRGB(124, 106, 255),
 	Text       = Color3.fromRGB(255, 255, 255),
-	Sub        = Color3.fromRGB(142, 144, 153),
-	Beige      = Color3.fromRGB(232, 217, 176),
-	BeigeText  = Color3.fromRGB(25, 25, 25),
-	TrackOff   = Color3.fromRGB(35, 36, 44),
-	Knob       = Color3.fromRGB(201, 204, 212),
-	Dark       = Color3.fromRGB(15, 16, 21),
+	Sub        = Color3.fromRGB(141, 143, 168),
+	Beige      = Color3.fromRGB(124, 106, 255),
+	BeigeText  = Color3.fromRGB(255, 255, 255),
+	TrackOff   = Color3.fromRGB(33, 35, 66),
+	Knob       = Color3.fromRGB(255, 255, 255),
+	Dark       = Color3.fromRGB(16, 18, 42),
 }
 
 local function corner(parent, radius)
@@ -597,6 +598,7 @@ function SableLib:CreateWindow(opts)
 	opts = opts or {}
 	local winName = opts.Name or "sable"
 	local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
+	local winVersion = opts.Version or "BETA"
 
 	-- cleanup old
 	pcall(function()
@@ -624,165 +626,235 @@ function SableLib:CreateWindow(opts)
 		Parent = gui,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = opts.Size or UDim2.fromOffset(620, 600),
-		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 1,
+		Size = opts.Size or UDim2.fromOffset(1100, 700),
+		BackgroundColor3 = Color3.fromRGB(10, 12, 30),
 		BorderSizePixel = 0,
 	})
+	corner(main, 14)
+	stroke(main, COLORS.RowStroke, 1, 0.25)
+	padding(main, 12, 12, 12, 12)
 
-	-- CONTENT CARD (Top-Pills sitzen INNEN wie im Bild)
-	local contentCard = create("Frame", {
-		Name = "Content",
+	-- BODY: Sidebar links + Content rechts (Referenz-Screenshot)
+	local body = create("Frame", {
+		Name = "Body",
 		Parent = main,
-		Position = UDim2.new(0, 0, 0, 0),
-		Size = UDim2.new(1, 0, 1, -118),
-		BackgroundColor3 = COLORS.ContentBG,
-		BackgroundTransparency = 0.06,
-		BorderSizePixel = 0,
-	})
-	corner(contentCard, 20)
-	stroke(contentCard, COLORS.RowStroke, 1, 0.25)
-	glossBg(contentCard)
-
-	-- TOP PILLS innen (QB Aimbot / Smart Fit / Reach & Timing)
-	local topBar = create("Frame", {
-		Name = "TopBar",
-		Parent = contentCard,
-		Size = UDim2.new(1, -36, 0, 48),
-		Position = UDim2.new(0, 18, 0, 14),
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 	})
 	create("UIListLayout", {
-		Parent = topBar,
+		Parent = body,
 		FillDirection = Enum.FillDirection.Horizontal,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 8),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
+		Padding = UDim.new(0, 12),
 	})
 
-	local scroll = create("ScrollingFrame", {
-		Name = "List",
-		Parent = contentCard,
-		Position = UDim2.new(0, 0, 0, 96),
-		Size = UDim2.new(1, 0, 1, -96),
+	-- SIDEBAR
+	local sidebar = create("Frame", {
+		Name = "Sidebar",
+		Parent = body,
+		Size = UDim2.new(0, 250, 1, 0),
+		BackgroundColor3 = COLORS.ContentBG,
+		BorderSizePixel = 0,
+		LayoutOrder = 1,
+	})
+	corner(sidebar, 12)
+	stroke(sidebar, COLORS.RowStroke, 1, 0.3)
+	padding(sidebar, 14, 14, 14, 14)
+
+	local logoRow = create("Frame", {
+		Parent = sidebar,
+		Size = UDim2.new(1, 0, 0, 52),
+		BackgroundTransparency = 1,
+	})
+	local logoIcon = create("ImageLabel", {
+		Parent = logoRow,
+		Size = UDim2.fromOffset(24, 24),
+		Position = UDim2.new(0, 2, 0, 4),
+		BackgroundTransparency = 1,
+		Image = SableLib:ResolveIcon("crown") or "",
+		ImageColor3 = COLORS.Beige,
+	})
+	create("TextLabel", {
+		Parent = logoRow,
+		Position = UDim2.new(0, 32, 0, 2),
+		Size = UDim2.new(1, -32, 0, 24),
+		BackgroundTransparency = 1,
+		Text = winName,
+		Font = Enum.Font.GothamBold,
+		TextSize = 17,
+		TextColor3 = COLORS.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	create("TextLabel", {
+		Parent = logoRow,
+		Position = UDim2.new(0, 32, 0, 26),
+		Size = UDim2.new(1, -32, 0, 16),
+		BackgroundTransparency = 1,
+		Text = string.upper(winVersion),
+		Font = Enum.Font.GothamMedium,
+		TextSize = 10,
+		TextColor3 = COLORS.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+
+	local sideScroll = create("ScrollingFrame", {
+		Name = "SideList",
+		Parent = sidebar,
+		Position = UDim2.new(0, 0, 0, 60),
+		Size = UDim2.new(1, 0, 1, -60),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 5,
+		ScrollBarThickness = 0,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	})
+	create("UIListLayout", {
+		Parent = sideScroll,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		Padding = UDim.new(0, 4),
+	})
+
+	-- CONTENT
+	local content = create("Frame", {
+		Name = "Content",
+		Parent = body,
+		Size = UDim2.new(1, -262, 1, 0),
+		BackgroundTransparency = 1,
+		LayoutOrder = 2,
+	})
+	local header = create("Frame", {
+		Parent = content,
+		Size = UDim2.new(1, 0, 0, 92),
+		BackgroundTransparency = 1,
+	})
+	local headerTitle = create("TextLabel", {
+		Parent = header,
+		Size = UDim2.new(1, -320, 0, 32),
+		BackgroundTransparency = 1,
+		Text = winName,
+		Font = Enum.Font.GothamBold,
+		TextSize = 24,
+		TextColor3 = COLORS.Text,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		TextTruncate = Enum.TextTruncate.AtEnd,
+	})
+	local headerSub = create("TextLabel", {
+		Parent = header,
+		Position = UDim2.new(0, 0, 0, 32),
+		Size = UDim2.new(1, -320, 0, 18),
+		BackgroundTransparency = 1,
+		Text = "",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLORS.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
+	local searchFrame = create("Frame", {
+		Parent = header,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 4),
+		Size = UDim2.new(0, 300, 0, 36),
+		BackgroundColor3 = COLORS.ContentBG,
+		BorderSizePixel = 0,
+	})
+	corner(searchFrame, 10)
+	stroke(searchFrame, COLORS.RowStroke, 1, 0.3)
+	create("TextLabel", {
+		Parent = searchFrame,
+		Size = UDim2.new(0, 36, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "⌕",
+		Font = Enum.Font.GothamBold,
+		TextSize = 15,
+		TextColor3 = COLORS.Sub,
+	})
+	local searchBox = create("TextBox", {
+		Parent = searchFrame,
+		Position = UDim2.new(0, 34, 0, 0),
+		Size = UDim2.new(1, -42, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		PlaceholderText = opts.SearchPlaceholder or "Search...",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLORS.Text,
+		PlaceholderColor3 = COLORS.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+		ClearTextOnFocus = false,
+	})
+	local backBtn = create("TextButton", {
+		Parent = header,
+		Position = UDim2.new(0, 0, 0, 58),
+		Size = UDim2.fromOffset(84, 26),
+		BackgroundTransparency = 1,
+		Text = "‹ Back",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLORS.Sub,
+		AutoButtonColor = false,
+	})
+	corner(backBtn, 13)
+	stroke(backBtn, COLORS.RowStroke, 1, 0.5)
+	local card = create("Frame", {
+		Name = "Card",
+		Parent = content,
+		Position = UDim2.new(0, 0, 0, 100),
+		Size = UDim2.new(1, 0, 1, -100),
+		BackgroundColor3 = COLORS.RowBG,
+		BorderSizePixel = 0,
+	})
+	corner(card, 12)
+	stroke(card, COLORS.RowStroke, 1, 0.3)
+	local scroll = create("ScrollingFrame", {
+		Name = "List",
+		Parent = card,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		ScrollBarThickness = 4,
 		ScrollBarImageColor3 = Color3.fromRGB(105, 107, 115),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	})
-	padding(scroll, 0, 8, 0, 0)
+	padding(scroll, 0, 10, 0, 10)
 	create("UIListLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 0),
 	})
 
-	-- Scroll-Chevron wie im Bild (zwischen Content und Bottom-Bar)
-	local chev = create("TextButton", {
-		Name = "ScrollHint",
-		Parent = main,
-		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 1, -105),
-		Size = UDim2.fromOffset(48, 24),
-		BackgroundTransparency = 1,
-		Text = "v",
-		Font = Enum.Font.GothamBold,
-		TextSize = 22,
-		TextColor3 = Color3.fromRGB(255, 255, 255),
-		AutoButtonColor = false,
-	})
-	local function updateChev()
-		local ok, maxY = pcall(function()
-			return scroll.AbsoluteWindowSize.Y
-		end)
-		if not ok then return end
-		local cy = scroll.CanvasPosition.Y
-		local ch = scroll.CanvasSize.Y.Offset
-		chev.Visible = (ch > maxY + 20) and (cy < ch - maxY - 20)
-	end
-	scroll:GetPropertyChangedSignal("CanvasPosition"):Connect(updateChev)
-	scroll:GetPropertyChangedSignal("CanvasSize"):Connect(updateChev)
-	chev.MouseButton1Click:Connect(function()
-		scroll.CanvasPosition = Vector2.new(0, scroll.CanvasPosition.Y + 140)
-		task.delay(0.1, updateChev)
-	end)
-	task.delay(0.5, updateChev)
-
-	-- BOTTOM NAV: ein Hintergrund-Balken wie im Bild, Tabs darin scrollbar
-	local bottomBar = create("Frame", {
-		Name = "BottomBar",
-		Parent = main,
-		AnchorPoint = Vector2.new(0, 1),
-		Position = UDim2.new(0, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 92),
-		BackgroundTransparency = 1,
-	})
-	local navBg = create("Frame", {
-		Name = "NavBg",
-		Parent = bottomBar,
-		Position = UDim2.new(0, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 92),
-		BackgroundColor3 = Color3.fromRGB(16, 17, 22),
-		BackgroundTransparency = 0.06,
-		BorderSizePixel = 0,
-	})
-	corner(navBg, 40)
-	stroke(navBg, COLORS.RowStroke, 1, 0.35)
-	glossBg(navBg)
-	local logo = create("TextLabel", {
-		Parent = bottomBar,
-		Size = UDim2.fromOffset(96, 56),
-		Position = UDim2.new(0, 24, 0, 18),
-		BackgroundTransparency = 1,
-		Text = winName,
-		Font = Enum.Font.GothamBold,
-		TextSize = 30,
-		TextColor3 = COLORS.Beige,
-		TextXAlignment = Enum.TextXAlignment.Left,
-	})
-	create("Frame", {
-		Name = "LogoSep",
-		Parent = bottomBar,
-		Position = UDim2.new(0, 128, 0, 20),
-		Size = UDim2.new(0, 1, 0, 52),
-		BackgroundColor3 = COLORS.RowStroke,
-		BackgroundTransparency = 0.3,
-		BorderSizePixel = 0,
-	})
-	local navScroll = create("ScrollingFrame", {
-		Name = "NavScroll",
-		Parent = bottomBar,
-		Position = UDim2.new(0, 140, 0, 18),
-		Size = UDim2.new(1, -152, 0, 56),
-		BackgroundTransparency = 1,
-		BorderSizePixel = 0,
-		ScrollBarThickness = 0,
-		AutomaticCanvasSize = Enum.AutomaticSize.X,
-		CanvasSize = UDim2.new(0, 0, 0, 0),
-		ScrollingDirection = Enum.ScrollingDirection.X,
-	})
-	create("UIListLayout", {
-		Parent = navScroll,
-		FillDirection = Enum.FillDirection.Horizontal,
-		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 8),
-		VerticalAlignment = Enum.VerticalAlignment.Center,
-	})
-
-	makeDraggable(main, { topBar, contentCard, bottomBar })
+	makeDraggable(main, { logoRow, header })
 
 	local Window = {}
 	Window.Gui = gui
 	Window.Main = main
 	Window._tabs = {}
 	Window._pages = {}
-	Window._topBar = topBar
 	Window._scroll = scroll
-	Window._bottomBar = bottomBar
-	Window._navScroll = navScroll
+	Window._sideList = sideScroll
+	Window._groups = {}
+	Window._sideOrder = 0
+	Window._headerTitle = headerTitle
+	Window._headerSub = headerSub
+	Window._searchBox = searchBox
+	Window._history = {}
+	Window._toggleRegs = {}
+	Window._logoIcon = logoIcon
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		applyFilter(Window)
+	end)
+	backBtn.MouseButton1Click:Connect(function()
+		local h = Window._history
+		if #h == 0 then return end
+		local last = table.remove(h)
+		if last and last.tab and last.tab._select then
+			last.tab._select(true, last.page)
+		end
+	end)
 	Window._currentTab = nil
 	Window._currentPage = nil
 	Window._toggleKey = toggleKey
@@ -798,41 +870,12 @@ function SableLib:CreateWindow(opts)
 		self._visible = not self._visible
 		gui.Enabled = self._visible
 	end
-	-- runder Icon-Button links in der TopBar wie im Bild (z.B. "headphones")
+	-- Sidebar-Logo-Icon zur Laufzeit wechseln, z.B. Window:SetTopIcon("crown")
 	function Window:SetTopIcon(iconName)
-		if self._topIconBtn then
-			pcall(function() self._topIconBtn:Destroy() end)
-			self._topIconBtn = nil
+		local img = SableLib:ResolveIcon(iconName or "headphones")
+		if img and self._logoIcon then
+			self._logoIcon.Image = img
 		end
-		local btn = create("TextButton", {
-			Parent = topBar,
-			Size = UDim2.fromOffset(48, 48),
-			BackgroundColor3 = COLORS.PillBG,
-			BorderSizePixel = 0,
-			AutoButtonColor = false,
-			Text = "",
-			LayoutOrder = -100,
-		})
-		corner(btn, 24)
-		stroke(btn, COLORS.RowStroke, 1, 0.3)
-		local img, rs, ro = SableLib:ResolveIcon(iconName or "headphones")
-		if img then
-			local il = create("ImageLabel", {
-				Parent = btn,
-				AnchorPoint = Vector2.new(0.5, 0.5),
-				Position = UDim2.new(0.5, 0, 0.5, 0),
-				Size = UDim2.fromOffset(24, 24),
-				BackgroundTransparency = 1,
-				Image = img,
-				ImageColor3 = COLORS.Text,
-			})
-			if rs and rs.X > 0 then
-				il.ImageRectSize = rs
-				il.ImageRectOffset = ro or Vector2.new(0, 0)
-			end
-		end
-		self._topIconBtn = btn
-		return btn
 	end
 	Window._popups = {}
 	local function closeAllPopups(win)
@@ -850,9 +893,10 @@ function SableLib:CreateWindow(opts)
 		end
 	end)
 
-	local function stylePill(btn, active)
+	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
+	local function sideStyle(btn, active)
 		btn.BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG
-		pcall(function() btn.TextColor3 = active and COLORS.Text or COLORS.Sub end)
+		btn.BackgroundTransparency = active and 0.15 or 1
 		for _, ch in ipairs(btn:GetDescendants()) do
 			if ch:IsA("TextLabel") then
 				ch.TextColor3 = active and COLORS.Text or COLORS.Sub
@@ -862,238 +906,184 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 
-	-- Bottom-Tabs wie im Bild: inaktiv nur Icon (40 breit), aktiv Icon+Name (expandiert mit Animation)
-	-- entry ist die Tab-Tabelle (keine Custom-Props auf Instances möglich)
-	local function animateBottomTab(entry, expand, instant)
-		local btn = entry.Button
-		local target = UDim2.fromOffset(expand and (entry._activeW or 110) or 56, 56)
-		if instant then
-			btn.Size = target
-		else
-			TweenService:Create(btn, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
+	-- Titel-Text einer Row finden (fuer Search-Filter)
+	local function rowTitle(row)
+		for _, d in ipairs(row:GetDescendants()) do
+			if d:IsA("TextLabel") and d.Font == Enum.Font.GothamBold and d.TextSize >= 15 then
+				return d.Text or ""
+			end
 		end
-		local nl = entry._nameLabel
-		if nl then
-			if expand then
-				nl.Visible = true
-				if instant then
-					nl.TextTransparency = 0
+		return ""
+	end
+
+	-- Sichtbarkeit aller Rows neu berechnen (aktive Page + Search)
+	local function applyFilter(win)
+		local q = string.lower(win._searchBox.Text or "")
+		for _, p in ipairs(win._pages) do
+			local active = (p == win._currentPage)
+			for _, r in ipairs(p.Rows) do
+				if not active then
+					r.Visible = false
+				elseif q == "" then
+					r.Visible = true
 				else
-					TweenService:Create(nl, TweenInfo.new(0.22), { TextTransparency = 0 }):Play()
-				end
-			else
-				if instant then
-					nl.TextTransparency = 1
-					nl.Visible = false
-				else
-					local tw = TweenService:Create(nl, TweenInfo.new(0.15), { TextTransparency = 1 })
-					tw.Completed:Connect(function()
-						if nl.TextTransparency >= 1 then nl.Visible = false end
-					end)
-					tw:Play()
+					r.Visible = string.find(string.lower(rowTitle(r)), q, 1, true) ~= nil
 				end
 			end
 		end
 	end
 
-	local function buildPillContent(btn, iconName, text, iconOnly)
-		btn.Text = ""
-		create("UIListLayout", {
-			Parent = btn,
-			FillDirection = Enum.FillDirection.Horizontal,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 10),
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		})
-		padding(btn, 16, 0, 16, 0)
-
-		local hasIcon = iconName and iconName ~= ""
-		if hasIcon then
-			local img, rectSize, rectOffset = nil, nil, nil
-			if isLucideName(iconName) or string.find(iconName, "rbxassetid", 1, true) then
-				img, rectSize, rectOffset = SableLib:ResolveIcon(iconName)
+	-- Section-Labels (nur sichtbar wenn Tab >1 Page hat)
+	local function syncPages(win)
+		for _, p in ipairs(win._pages) do
+			if p.LabelRow then
+				p.LabelRow.Visible = (p.ParentTab == win._currentTab) and (#p.ParentTab.Pages > 1)
 			end
-			if img then
-				local imgLabel = create("ImageLabel", {
-					Parent = btn,
-					Size = UDim2.fromOffset(22, 22),
-					BackgroundTransparency = 1,
-					Image = img,
-					ImageColor3 = COLORS.Sub,
-					LayoutOrder = 1,
-				})
-				-- Vollbild-Assets brauchen kein Rect (nur setzen, wenn wirklich ein Atlas geliefert wird)
-				if rectSize and rectSize.X > 0 and rectSize.Y > 0 then
-					imgLabel.ImageRectSize = rectSize
-					imgLabel.ImageRectOffset = rectOffset or Vector2.new(0, 0)
-				end
-			else
-				-- fallback: emoji / text-symbol (z.B. "+", "↗")
-				-- wenn lucide-name nicht gefunden wurde, nichts als Text anzeigen (kein "trending-up" text)
-				if not isLucideName(iconName) then
-					create("TextLabel", {
-						Parent = btn,
-						Size = UDim2.fromOffset(24, 24),
-						BackgroundTransparency = 1,
-						Text = iconName,
-						Font = Enum.Font.GothamBold,
-						TextSize = 18,
-						TextColor3 = COLORS.Sub,
-						LayoutOrder = 1,
-					})
-				else
-					warn("[sable] lucide icon nicht gefunden: " .. tostring(iconName))
-				end
-			end
-		end
-
-		if not iconOnly then
-			create("TextLabel", {
-				Parent = btn,
-				Size = UDim2.fromOffset(0, 22),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundTransparency = 1,
-				Text = text or "",
-				Font = Enum.Font.GothamBold,
-				TextSize = 16,
-				TextColor3 = COLORS.Sub,
-				LayoutOrder = 2,
-			})
 		end
 	end
 
+	-- Header: "<n> modules - <m> enabled"
+	local function refreshHeader(win)
+		local tab = win._currentTab
+		if not tab then return end
+		win._headerTitle.Text = tab.Title or tab.Name
+		local total = tab.Count or 0
+		if total == 0 then
+			for _, p in ipairs(tab.Pages) do total = total + #p.Rows end
+		end
+		local en = 0
+		for _, r in ipairs(win._toggleRegs) do
+			if r.tab == tab then
+				local ok, v = pcall(r.get)
+				if ok and v then en = en + 1 end
+			end
+		end
+		win._headerSub.Text = string.format("%d modules · %d enabled", total, en)
+	end
+
+	-- Sidebar-Navigation (Screenshot): Tabs links, Pages als Sections im Content
 	-- creates a top pill page holder in advance, actual rows live in one shared scroll
 	-- we switch visibility per page by storing row frames
 	-- Icon kann sein: "crown" / "swords" / "skull" (lucide-name) ODER "rbxassetid://..." ODER emoji-text
 	function Window:CreateTab(tabOpts)
 		tabOpts = tabOpts or {}
 		local tabName = tabOpts.Name or "Main"
-		local icon = tabOpts.Icon or "house"
+		local icon = tabOpts.Icon or "home"
 
 		local isActive = (#self._tabs == 0)
-		local neverName = (tabName == "" or tabOpts.IconOnly == true)
-
-		-- Zielbreite für aktiven Zustand aus Textbreite berechnen
-		local activeW = 56
-		if not neverName then
-			local tw = #tabName * 8
-			pcall(function()
-				tw = TextService:GetTextSize(tabName, 16, Enum.Font.GothamBold, Vector2.new(1000, 22)).X
-			end)
-			activeW = math.clamp(math.ceil(72 + tw), 96, 210)
+		local group = tabOpts.Group or "MODULES"
+		if not self._groups[group] then
+			self._groups[group] = true
+			self._sideOrder = self._sideOrder + 1
+			create("TextLabel", {
+				Parent = self._sideList,
+				Size = UDim2.new(1, 0, 0, 24),
+				BackgroundTransparency = 1,
+				Text = "  " .. string.upper(group),
+				Font = Enum.Font.GothamMedium,
+				TextSize = 11,
+				TextColor3 = COLORS.Sub,
+				TextXAlignment = Enum.TextXAlignment.Left,
+				LayoutOrder = self._sideOrder,
+			})
 		end
-
-		local pill = create("TextButton", {
-			Parent = navScroll,
-			Size = UDim2.fromOffset(isActive and activeW or 56, 56),
-			BackgroundColor3 = isActive and COLORS.PillActive or COLORS.PillBG,
+		self._sideOrder = self._sideOrder + 1
+		local btn = create("TextButton", {
+			Parent = self._sideList,
+			Size = UDim2.new(1, 0, 0, 40),
+			BackgroundColor3 = COLORS.PillActive,
+			BackgroundTransparency = 1,
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
 			Text = "",
-			ClipsDescendants = true,
-			LayoutOrder = #self._tabs + 1,
+			LayoutOrder = self._sideOrder,
 		})
-		corner(pill, 15)
-		stroke(pill, COLORS.RowStroke, 1, 0.3)
-		glossBg(pill)
-		create("UIListLayout", {
-			Parent = pill,
-			FillDirection = Enum.FillDirection.Horizontal,
-			SortOrder = Enum.SortOrder.LayoutOrder,
-			Padding = UDim.new(0, 7),
-			VerticalAlignment = Enum.VerticalAlignment.Center,
-			HorizontalAlignment = Enum.HorizontalAlignment.Center,
-		})
-		padding(pill, 14, 0, 14, 0)
-		-- Icon (lucide oder Text-Fallback)
+		corner(btn, 10)
 		do
-			local img, rs, ro = nil, nil, nil
+			local img = nil
 			if isLucideName(icon) or string.find(icon, "rbxassetid", 1, true) then
-				img, rs, ro = SableLib:ResolveIcon(icon)
+				img = SableLib:ResolveIcon(icon)
 			end
 			if img then
-				local il = create("ImageLabel", {
-					Parent = pill,
-					Size = UDim2.fromOffset(24, 24),
+				create("ImageLabel", {
+					Parent = btn,
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					Size = UDim2.fromOffset(20, 20),
 					BackgroundTransparency = 1,
 					Image = img,
 					ImageColor3 = COLORS.Sub,
-					LayoutOrder = 1,
 				})
-				if rs and rs.X > 0 then
-					il.ImageRectSize = rs
-					il.ImageRectOffset = ro or Vector2.new(0, 0)
-				end
 			elseif icon ~= "" then
 				create("TextLabel", {
-					Parent = pill,
-					Size = UDim2.fromOffset(24, 24),
+					Parent = btn,
+					AnchorPoint = Vector2.new(0, 0.5),
+					Position = UDim2.new(0, 12, 0.5, 0),
+					Size = UDim2.fromOffset(20, 20),
 					BackgroundTransparency = 1,
 					Text = icon,
 					Font = Enum.Font.GothamBold,
-					TextSize = 18,
+					TextSize = 15,
 					TextColor3 = COLORS.Sub,
-					LayoutOrder = 1,
 				})
 			end
 		end
-		local nameLabel = nil
-		if not neverName then
-			nameLabel = create("TextLabel", {
-				Parent = pill,
-				Size = UDim2.fromOffset(0, 22),
-				AutomaticSize = Enum.AutomaticSize.X,
+		create("TextLabel", {
+			Parent = btn,
+			Position = UDim2.new(0, 40, 0, 0),
+			Size = UDim2.new(1, -88, 1, 0),
+			BackgroundTransparency = 1,
+			Text = tabName,
+			Font = Enum.Font.GothamBold,
+			TextSize = 14,
+			TextColor3 = COLORS.Sub,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			TextTruncate = Enum.TextTruncate.AtEnd,
+		})
+		if tabOpts.Count then
+			create("TextLabel", {
+				Parent = btn,
+				AnchorPoint = Vector2.new(1, 0.5),
+				Position = UDim2.new(1, -12, 0.5, 0),
+				Size = UDim2.fromOffset(44, 20),
 				BackgroundTransparency = 1,
-				Text = tabName,
-				Font = Enum.Font.GothamBold,
-				TextSize = 16,
+				Text = tostring(tabOpts.Count),
+				Font = Enum.Font.GothamMedium,
+				TextSize = 13,
 				TextColor3 = COLORS.Sub,
-				TextTransparency = isActive and 0 or 1,
-				Visible = isActive,
-				LayoutOrder = 2,
+				TextXAlignment = Enum.TextXAlignment.Right,
 			})
 		end
-		local Tab = { Name = tabName, Button = pill, Pages = {}, ParentWindow = self }
-		Tab._nameLabel = nameLabel
-		Tab._activeW = activeW
-		stylePill(pill, isActive)
-
-		local function selectTab(target)
+		local Tab = { Name = tabName, Title = tabOpts.Title, Count = tabOpts.Count, Group = group, Button = btn, Pages = {}, ParentWindow = self }
+		sideStyle(btn, isActive)
+		local function selectTab(target, fromBack, pageOverride)
 			local win = target.ParentWindow
 			closeAllPopups(win)
+			if not fromBack and win._currentTab and win._currentTab ~= target then
+				table.insert(win._history, { tab = win._currentTab, page = win._currentPage })
+			end
 			win._currentTab = target
-			for _, t in ipairs(win._tabs) do
-				local on = (t == target)
-				stylePill(t.Button, on)
-				animateBottomTab(t, on, false)
+			for _, t2 in ipairs(win._tabs) do
+				sideStyle(t2.Button, t2 == target)
 			end
-			-- nur Top-Pills von diesem Tab zeigen
-			for _, p in ipairs(win._pages) do
-				p.TopButton.Visible = (p.ParentTab == target)
-			end
-			-- Seite bestimmen: aktuelle behalten wenn sie zu diesem Tab gehört, sonst erste
-			local toShow = nil
-			if win._currentPage and win._currentPage.ParentTab == target then
-				toShow = win._currentPage
-			else
-				toShow = target.Pages[1]
+			local toShow = pageOverride
+			if not toShow then
+				if win._currentPage and win._currentPage.ParentTab == target then
+					toShow = win._currentPage
+				else
+					toShow = target.Pages[1]
+				end
 			end
 			win._currentPage = toShow
-			for _, p in ipairs(win._pages) do
-				local active = (p == toShow)
-				if p.ParentTab == target then
-					stylePill(p.TopButton, active)
-				end
-				for _, r in ipairs(p.Rows) do
-					r.Visible = active
-				end
-			end
+			syncPages(win)
+			applyFilter(win)
+			refreshHeader(win)
 			pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
 		end
+		Tab._select = function(fb, pg) selectTab(Tab, fb, pg) end
 
-		pill.MouseButton1Click:Connect(function()
-			selectTab(Tab)
+		btn.MouseButton1Click:Connect(function()
+			selectTab(Tab, false, nil)
 		end)
 
 		function Tab:CreatePage(pageOpts)
@@ -1103,57 +1093,53 @@ function SableLib:CreateWindow(opts)
 
 			local win = self.ParentWindow
 			local isFirstOverall = (#win._pages == 0)
-			local isOwnTabSelected = (win._currentTab == nil and #win._tabs <= 1) or (win._currentTab == self)
 
-			local topPill = create("TextButton", {
-				Parent = win._topBar,
-				Size = UDim2.fromOffset(0, 48),
-				AutomaticSize = Enum.AutomaticSize.X,
-				BackgroundColor3 = COLORS.PillBG,
-				BorderSizePixel = 0,
-				AutoButtonColor = false,
-				Text = "",
-				Visible = isOwnTabSelected,
-				LayoutOrder = #win._pages + 1,
-			})
-			corner(topPill, 16)
-			stroke(topPill, COLORS.RowStroke, 1, 0.3)
-			glossBg(topPill)
-			buildPillContent(topPill, pageIcon, pageName, false)
-
+			local thisTab = self
 			local Page = {
 				Name = pageName,
-				TopButton = topPill,
 				Rows = {},
 				ParentTab = self,
 				ParentWindow = win,
 			}
 
-			local function selectPage()
+			local function selectPage(fromBack)
 				closeAllPopups(win)
+				if not fromBack and win._currentPage and win._currentPage ~= Page then
+					table.insert(win._history, { tab = win._currentTab, page = win._currentPage })
+				end
 				win._currentTab = self
 				win._currentPage = Page
-				for _, t in ipairs(win._tabs) do
-					local on = (t == self)
-					stylePill(t.Button, on)
-					animateBottomTab(t, on, false)
+				for _, t2 in ipairs(win._tabs) do
+					sideStyle(t2.Button, t2 == self)
 				end
-				for _, p in ipairs(win._pages) do
-					p.TopButton.Visible = (p.ParentTab == self)
-				end
-				for _, p in ipairs(win._pages) do
-					local active = (p == Page)
-					if p.ParentTab == self then
-						stylePill(p.TopButton, active)
-					end
-					for _, r in ipairs(p.Rows) do
-						r.Visible = active
-					end
-				end
+				syncPages(win)
+				applyFilter(win)
+				refreshHeader(win)
 				pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
 			end
 
-			topPill.MouseButton1Click:Connect(selectPage)
+			local labelRow = create("TextButton", {
+				Parent = win._scroll,
+				Size = UDim2.new(1, 0, 0, 28),
+				BackgroundTransparency = 1,
+				Text = "",
+				AutoButtonColor = false,
+				Visible = false,
+			})
+			create("TextLabel", {
+				Parent = labelRow,
+				Size = UDim2.new(1, 0, 1, 0),
+				BackgroundTransparency = 1,
+				Text = "  " .. string.upper(pageName),
+				Font = Enum.Font.GothamMedium,
+				TextSize = 11,
+				TextColor3 = COLORS.Sub,
+				TextXAlignment = Enum.TextXAlignment.Left,
+			})
+			Page.LabelRow = labelRow
+			labelRow.MouseButton1Click:Connect(function()
+				selectPage(false)
+			end)
 
 			-- ROWS wie im Bild: eine durchgehende Card, Rows transparent mit Trennlinie
 			local function baseRow(height)
@@ -1205,37 +1191,38 @@ function SableLib:CreateWindow(opts)
 				})
 
 				local state = tOpts.Default or false
+				table.insert(win._toggleRegs, { tab = thisTab, get = function() return state end })
 				local track = create("TextButton", {
 					Parent = row,
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(1, 0, 0.5, 0),
-					Size = UDim2.fromOffset(60, 34),
+					Size = UDim2.fromOffset(48, 26),
 					BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff,
 					Text = "",
 					AutoButtonColor = false,
 				})
-				corner(track, 17)
+				corner(track, 13)
 				stroke(track, COLORS.RowStroke, 1, 0.5)
 				glossBg(track)
 				local knob = create("Frame", {
 					Parent = track,
 					AnchorPoint = Vector2.new(0, 0.5),
-					Position = state and UDim2.new(1, -32, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
-					Size = UDim2.fromOffset(28, 28),
-					BackgroundColor3 = state and COLORS.BeigeText or COLORS.Knob,
+					Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+					Size = UDim2.fromOffset(20, 20),
+					BackgroundColor3 = COLORS.Knob,
 					BorderSizePixel = 0,
 				})
-				corner(knob, 14)
+				corner(knob, 10)
 				glossBg(knob)
 				create("UIScale", { Parent = knob, Scale = 1 })
 
 				local OFF_X = 4
-				local ON_X = 28
+				local ON_X = 24
 				local function update()
 					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
 					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
-						Position = state and UDim2.new(1, -32, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
-						BackgroundColor3 = state and COLORS.BeigeText or COLORS.Knob,
+						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+						BackgroundColor3 = COLORS.Knob,
 					}):Play()
 				end
 
@@ -1269,11 +1256,12 @@ function SableLib:CreateWindow(opts)
 					TweenService:Create(knobScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 					if moved then
 						local curX = knob.Position.X.Offset
-						local newState = (curX + 14 > 30)
+						local newState = (curX + 10 > 14)
 						if newState ~= state then
 							state = newState
 							update()
 							if tOpts.Callback then pcall(tOpts.Callback, state) end
+							pcall(function() refreshHeader(win) end)
 						else
 							update()
 						end
@@ -1285,6 +1273,7 @@ function SableLib:CreateWindow(opts)
 				end)
 
 				if state then update() end
+				pcall(function() refreshHeader(win) end)
 				return Page
 			end
 
@@ -1579,6 +1568,145 @@ function SableLib:CreateWindow(opts)
 					end
 				end)
 				return Page
+			end
+
+			-- Range-Slider (Screenshot "Delay": zwei Knobs + Werte-Box rechts)
+			function Page:AddRangeSlider(rOpts)
+				local row = baseRow(88)
+				create("TextLabel", {
+					Parent = row,
+					Size = UDim2.new(1, -270, 0, 22),
+					BackgroundTransparency = 1,
+					Text = rOpts.Name or "Range",
+					Font = Enum.Font.GothamBold,
+					TextSize = 17,
+					TextColor3 = COLORS.Text,
+					TextXAlignment = Enum.TextXAlignment.Left,
+					TextTruncate = Enum.TextTruncate.AtEnd,
+				})
+				create("TextLabel", {
+					Parent = row,
+					Position = UDim2.new(0, 0, 0, 24),
+					Size = UDim2.new(1, -270, 0, 34),
+					BackgroundTransparency = 1,
+				Text = rOpts.Description or "",
+				Font = Enum.Font.Gotham,
+				TextSize = 13,
+				TextColor3 = COLORS.Sub,
+				TextXAlignment = Enum.TextXAlignment.Left,
+					TextYAlignment = Enum.TextYAlignment.Top,
+					TextWrapped = true,
+				})
+				local min = rOpts.Min or 0
+				local max = rOpts.Max or 100
+				if max <= min then max = min + 1 end
+				local lo = math.clamp(rOpts.MinDefault or rOpts.MinValue or min, min, max)
+				local hi = math.clamp(rOpts.MaxDefault or rOpts.MaxValue or max, min, max)
+				if lo > hi then lo, hi = hi, lo end
+				local dec = rOpts.Decimals or 0
+				local suf = rOpts.Suffix or ""
+				local function fmt(v)
+					local s
+					if dec > 0 then s = string.format("%." .. dec .. "f", v)
+					else s = tostring(math.floor(v + 0.5)) end
+					if suf ~= "" then s = s .. " " .. suf end
+					return s
+				end
+				local valBox = create("TextLabel", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, 0, 0, 30),
+					Size = UDim2.fromOffset(124, 26),
+					BackgroundColor3 = COLORS.Dark,
+					Font = Enum.Font.GothamMedium,
+					TextSize = 12,
+					TextColor3 = COLORS.Text,
+					BorderSizePixel = 0,
+				})
+				corner(valBox, 8)
+				stroke(valBox, COLORS.RowStroke, 1, 0.2)
+				local bar = create("TextButton", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0),
+					Position = UDim2.new(1, -134, 0, 40),
+					Size = UDim2.new(0, 150, 0, 6),
+					BackgroundColor3 = COLORS.TrackOff,
+					Text = "",
+					AutoButtonColor = false,
+				})
+				corner(bar, 3)
+				local fill = create("Frame", {
+					Parent = bar,
+					BackgroundColor3 = COLORS.Beige,
+					BorderSizePixel = 0,
+				})
+				corner(fill, 3)
+				glossBg(fill)
+				local k1 = create("TextButton", {
+					Parent = bar,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Size = UDim2.fromOffset(16, 16),
+					BackgroundColor3 = COLORS.Beige,
+					Text = "",
+					AutoButtonColor = false,
+					ZIndex = 2,
+				})
+				corner(k1, 8)
+				local k2 = create("TextButton", {
+					Parent = bar,
+					AnchorPoint = Vector2.new(0.5, 0.5),
+					Size = UDim2.fromOffset(16, 16),
+					BackgroundColor3 = COLORS.Beige,
+					Text = "",
+					AutoButtonColor = false,
+					ZIndex = 2,
+				})
+				corner(k2, 8)
+				local function render(fire)
+					local a = (lo - min) / (max - min)
+					local b = (hi - min) / (max - min)
+					fill.Position = UDim2.new(a, 0, 0, 0)
+					fill.Size = UDim2.new(math.max(b - a, 0), 0, 1, 0)
+					k1.Position = UDim2.new(a, 0, 0.5, 0)
+					k2.Position = UDim2.new(b, 0, 0.5, 0)
+					valBox.Text = fmt(lo) .. " – " .. fmt(hi)
+					if fire and rOpts.Callback then
+						pcall(rOpts.Callback, lo, hi)
+					end
+				end
+				local function dragKnob(knob, isLo)
+					knob.InputBegan:Connect(function(input)
+						if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+						local moveConn
+						moveConn = UserInputService.InputChanged:Connect(function(m)
+							if m.UserInputType ~= Enum.UserInputType.MouseMovement and m.UserInputType ~= Enum.UserInputType.Touch then return end
+							local p = math.clamp((m.Position.X - bar.AbsolutePosition.X) / math.max(bar.AbsoluteSize.X, 1), 0, 1)
+							local v = min + (max - min) * p
+							if isLo then lo = math.min(v, hi) else hi = math.max(v, lo) end
+							render(false)
+						end)
+						local endConn
+						endConn = UserInputService.InputEnded:Connect(function(e)
+							if e.UserInputType == Enum.UserInputType.MouseButton1 or e.UserInputType == Enum.UserInputType.Touch then
+								pcall(function() moveConn:Disconnect() end)
+								pcall(function() endConn:Disconnect() end)
+								render(true)
+							end
+						end)
+					end)
+				end
+				dragKnob(k1, true)
+				dragKnob(k2, false)
+				render(false)
+				local api = {}
+				function api:Get() return lo, hi end
+				function api:Set(a, b)
+					lo = math.clamp(a or lo, min, max)
+					hi = math.clamp(b or hi, min, max)
+					if lo > hi then lo, hi = hi, lo end
+					render(true)
+				end
+				return api
 			end
 
 			function Page:AddProgress(pOpts)
@@ -2252,13 +2380,10 @@ function SableLib:CreateWindow(opts)
 			if isFirstOverall then
 				win._currentTab = self
 				win._currentPage = Page
-				stylePill(topPill, true)
-				topPill.Visible = true
-			else
-				stylePill(topPill, false)
-				topPill.Visible = (win._currentTab == self)
-				-- rows bleiben versteckt bis Seite gewählt wird (baseRow prüft _currentPage)
 			end
+			syncPages(win)
+			applyFilter(win)
+			pcall(function() refreshHeader(win) end)
 			return Page
 		end
 

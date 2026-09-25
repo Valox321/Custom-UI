@@ -1,96 +1,87 @@
---// sable example (SableLib 1.13-lucide)
---// Icons: Lucide-Namen (https://lucide.dev), z.B. "settings", "swords", "eye"
+--// sable example: Referenz-Screenshot 1:1 (SableLib 1.14-shot)
+--// Tabs = Sidebar (MODULES / GENERAL), Pages = Sections im Content
 local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua"))()
 print("[sable] lib version:", Sable.Version or "?")
 
 local Window = Sable:CreateWindow({
-	Name = "My Client",
+	Name = "Prestige Client",
+	Version = "BETA RELEASE 4.3.0",
 	ToggleKey = Enum.KeyCode.RightShift,
+	SearchPlaceholder = "Search modules",
 })
 
--- Tabs (Icon = Lucide-Name, rbxassetid oder Text/Emoji als Fallback)
-local Combat = Window:CreateTab({ Name = "Combat", Icon = "swords" })
-local Visual = Window:CreateTab({ Name = "Visual", Icon = "eye" })
-local Settings = Window:CreateTab({ Name = "Settings", Icon = "settings" })
+-- MODULES (Sidebar oben, mit Counts wie im Screenshot)
+local Combat = Window:CreateTab({ Name = "Combat", Title = "Combat Modules", Icon = "swords", Count = 39 })
+Window:CreateTab({ Name = "Mace", Icon = "hammer", Count = 13 })
+Window:CreateTab({ Name = "Misc", Icon = "wrench", Count = 26 })
+Window:CreateTab({ Name = "Movement", Icon = "movement", Count = 11 })
+Window:CreateTab({ Name = "Spear", Icon = "sword", Count = 4 })
+Window:CreateTab({ Name = "Visual", Icon = "eye", Count = 24 })
 
--- Pages
-local Main = Combat:CreatePage({ Name = "Main", Icon = "zap" })
-local Aim = Combat:CreatePage({ Name = "Aimbot", Icon = "crosshair" })
-local ESP = Visual:CreatePage({ Name = "ESP", Icon = "scan-eye" })
+-- GENERAL (Sidebar unten)
+Window:CreateTab({ Name = "Settings", Icon = "menu", Group = "GENERAL" })
+Window:CreateTab({ Name = "Theme", Icon = "palette", Group = "GENERAL" })
+Window:CreateTab({ Name = "Configs", Icon = "folder", Group = "GENERAL" })
+Window:CreateTab({ Name = "Socials", Icon = "users", Group = "GENERAL" })
+Window:CreateTab({ Name = "Keybinds", Icon = "keyboard", Group = "GENERAL" })
 
--- Toggle
-Main:AddToggle({
+-- Combat-Module (Rows wie im Screenshot)
+local AutoCrystal = Combat:CreatePage({ Name = "Auto Crystal" })
+
+AutoCrystal:AddToggle({
 	Name = "Auto Crystal",
 	Description = "Automatically places and explodes crystals.",
 	Default = false,
-	Callback = function(v) print("AutoCrystal:", v) end,
+	Callback = print,
 })
-
--- Slider
-Main:AddSlider({
+AutoCrystal:AddToggle({
+	Name = "Damage Tick",
+	Description = "Breaks crystals only when they deal damage.",
+	Default = false,
+	Callback = print,
+})
+AutoCrystal:AddToggle({
+	Name = "Pause On Kill",
+	Description = "Pauses while a dead body is nearby.",
+	Default = true,
+	Callback = print,
+})
+AutoCrystal:AddRangeSlider({
 	Name = "Delay",
-	Min = 0, Max = 500, Default = 100,
-	Callback = function(v) print("Delay:", v) end,
+	Description = "Waits a random time in this range between actions (ms).",
+	Min = 0, Max = 500, MinDefault = 30, MaxDefault = 130,
+	Decimals = 1,
+	Callback = function(a, b) print("Delay:", a, b) end,
 })
-
--- Dropdown (Single-Select)
-Main:AddDropdown({
-	Name = "Mode",
-	Description = "Select a mode.",
-	Options = { "Normal", "Legit", "Rage" },
-	Default = "Normal",
-	Callback = function(v) print("Mode:", v) end,
+AutoCrystal:AddToggle({
+	Name = "Switch",
+	Description = "Switches to crystals when the module enables.",
+	Default = false,
+	Callback = print,
 })
-
--- Button
-Main:AddButton({
-	Name = "Reset Settings",
-	Description = "Reset all settings.",
-	Text = "Reset",
-	Callback = function()
-		Window:Notify({ Title = "Reset", Description = "Settings reset.", Duration = 2 })
-	end,
+AutoCrystal:AddToggle({
+	Name = "Head Bob",
+	Description = "Updates your pitch server-side to break crystals above or below.",
+	Default = false,
+	Callback = print,
 })
-
--- Label (mit live-setzbarem Wert rechts)
-local status = Aim:AddLabel({ Name = "Status", Description = "Aktueller Modus.", Value = "idle" })
-Aim:AddToggle({
-	Name = "Aimbot Enabled",
-	Description = "Aims for you.",
+AutoCrystal:AddToggle({
+	Name = "Render",
+	Description = "Outlines the crystal being targeted.",
 	Default = true,
-	Callback = function(v) status:Set(v and "active" or "idle") end,
+	Callback = print,
 })
-
--- Input (Callback feuert bei Enter)
-Aim:AddInput({
-	Name = "Target",
-	Description = "Player name to target.",
-	Default = "",
-	Placeholder = "Enter username...",
-	Callback = function(v) print("Target:", v) end,
+AutoCrystal:AddColorpicker({
+	Name = "Color",
+	Description = "Sets the crystal outline color.",
+	Default = Color3.fromRGB(124, 106, 255),
+	Callback = print,
 })
-
--- Keybind (Klick -> Taste druecken, Callback feuert bei Druck)
-Aim:AddKeybind({
-	Name = "Toggle Aim",
-	Description = "Hold-key for aim assist.",
-	Default = Enum.KeyCode.E,
-	Callback = function(k) print("Aim key:", k) end,
-})
-
--- Colorpicker
-ESP:AddColorpicker({
-	Name = "ESP Color",
-	Description = "Box outline color.",
-	Default = Color3.fromRGB(130, 100, 255),
-	Callback = function(c) print("ESP color:", c) end,
-})
-ESP:AddToggle({
-	Name = "Boxes",
-	Description = "Draw 2D boxes around players.",
+AutoCrystal:AddToggle({
+	Name = "Always Break Last",
+	Description = "When disabled, finishes breaking the crystal under your crosshair before turning off.",
 	Default = true,
-	Callback = function(v) print("Boxes:", v) end,
+	Callback = print,
 })
 
--- Notify
-Window:Notify({ Title = "My Client", Description = "UI geladen. RightShift = ein-/ausblenden.", Duration = 3 })
+Window:Notify({ Title = "Prestige Client", Description = "UI geladen. RightShift = ein-/ausblenden.", Duration = 3 })
