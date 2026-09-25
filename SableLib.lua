@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.10-pages-in"
+SableLib.Version = "1.11-toggle"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -797,20 +797,60 @@ function SableLib:CreateWindow(opts)
 					BorderSizePixel = 0,
 				})
 				corner(knob, 14)
+				create("UIScale", { Parent = knob, Scale = 1 })
 
+				local OFF_X = 4
+				local ON_X = 28
 				local function update()
-					TweenService:Create(track, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
-					TweenService:Create(knob, TweenInfo.new(0.18), {
+					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
+					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 						Position = state and UDim2.new(1, -32, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
 						BackgroundColor3 = state and COLORS.BeigeText or COLORS.Knob,
 					}):Play()
 				end
 
-				track.MouseButton1Click:Connect(function()
-					state = not state
-					update()
-					if tOpts.Callback then
-						pcall(tOpts.Callback, state)
+				-- wie WindUI: Knopf draggen (Snap zur Hälfte) oder klicken, Scale-Feedback beim Drücken
+				local dragging = false
+				local moved = false
+				local startX = 0
+				local startKnobX = OFF_X
+				local knobScale = knob:FindFirstChildOfClass("UIScale")
+				track.InputBegan:Connect(function(input)
+					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+						dragging = true
+						moved = false
+						startX = input.Position.X
+						startKnobX = state and ON_X or OFF_X
+						TweenService:Create(knobScale, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1.3 }):Play()
+					end
+				end)
+				UserInputService.InputChanged:Connect(function(input)
+					if not dragging then return end
+					if input.UserInputType ~= Enum.UserInputType.MouseMovement and input.UserInputType ~= Enum.UserInputType.Touch then return end
+					local dx = input.Position.X - startX
+					if math.abs(dx) > 8 then moved = true end
+					local newX = math.clamp(startKnobX + dx, OFF_X, ON_X)
+					knob.Position = UDim2.new(0, newX, 0.5, 0)
+				end)
+				UserInputService.InputEnded:Connect(function(input)
+					if not dragging then return end
+					if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+					dragging = false
+					TweenService:Create(knobScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1 }):Play()
+					if moved then
+						local curX = knob.Position.X.Offset
+						local newState = (curX + 14 > 30)
+						if newState ~= state then
+							state = newState
+							update()
+							if tOpts.Callback then pcall(tOpts.Callback, state) end
+						else
+							update()
+						end
+					else
+						state = not state
+						update()
+						if tOpts.Callback then pcall(tOpts.Callback, state) end
 					end
 				end)
 
