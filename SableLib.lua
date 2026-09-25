@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.38"
+SableLib.Version = "1.39"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1037,8 +1037,21 @@ function SableLib:CreateWindow(opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 8),
 	})
+	local gridScroll = create("ScrollingFrame", {
+		Name = "Grid",
+		Parent = card,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+		Visible = false,
+		ScrollBarThickness = 0,
+		AutomaticCanvasSize = Enum.AutomaticSize.Y,
+		CanvasSize = UDim2.new(0, 0, 0, 0),
+		ScrollingDirection = Enum.ScrollingDirection.Y,
+	})
+	padding(gridScroll, 0, 10, 0, 10)
 	local gridLayout = create("UIGridLayout", {
-		Parent = scroll,
+		Parent = gridScroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		CellPadding = UDim2.new(0, 8, 0, 8),
 		CellSize = UDim2.new(0.5, -4, 0, 110),
@@ -1113,6 +1126,7 @@ function SableLib:CreateWindow(opts)
 	Window._logoIcon = logoIcon
 	Window._listLayout = listLayout
 	Window._gridLayout = gridLayout
+	Window._gridScroll = gridScroll
 	Window._emptyLabel = emptyLabel
 	Window._view = "list"
 	Window._chipBtn = chipBtn
@@ -1273,10 +1287,29 @@ function SableLib:CreateWindow(opts)
 		glowStroke(win._listBtn).Transparency = grid and 1 or 0.7
 		glowStroke(win._gridBtn).Transparency = grid and 0.7 or 1
 	end
+	local function updateGridColumns(win)
+		local gs = win._gridScroll
+		if not gs then return end
+		local w = gs.AbsoluteSize.X
+		if w <= 0 then return end
+		local n = math.clamp(math.floor(w / 300), 1, 3)
+		local cw = math.floor((w - (n - 1) * 8) / n)
+		win._gridLayout.CellSize = UDim2.new(0, cw, 0, 110)
+	end
 	local function applyView(win, animate)
 		local grid = win._view == "grid"
-		win._gridLayout.Parent = grid and win._scroll or nil
-		win._listLayout.Parent = grid and nil or win._scroll
+		for _, p in ipairs(win._pages) do
+			for _, r in ipairs(p.Rows) do
+				if grid and r:GetAttribute("CardBG") == nil then
+					r.Visible = false
+				else
+					r.Parent = grid and win._gridScroll or win._scroll
+				end
+			end
+		end
+		win._gridScroll.Visible = grid
+		win._scroll.Visible = not grid
+		if grid then updateGridColumns(win) end
 		syncPages(win)
 		applyFilter(win)
 		styleViewBtns(win)
@@ -1447,6 +1480,7 @@ function SableLib:CreateWindow(opts)
 			applyFilter(win)
 			refreshHeader(win)
 			pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
+			pcall(function() win._gridScroll.CanvasPosition = Vector2.new(0, 0) end)
 			animateCards(win)
 		end
 		Tab._select = function(fb, pg) selectTab(Tab, fb, pg) end
@@ -1485,6 +1519,7 @@ function SableLib:CreateWindow(opts)
 				applyFilter(win)
 				refreshHeader(win)
 				pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
+				pcall(function() win._gridScroll.CanvasPosition = Vector2.new(0, 0) end)
 				animateCards(win)
 			end
 
@@ -2891,6 +2926,9 @@ function SableLib:CreateWindow(opts)
 
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		applyFilter(Window)
+	end)
+	gridScroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+		if Window._view == "grid" then updateGridColumns(Window) end
 	end)
 	applyView(Window, false)
 	return Window
