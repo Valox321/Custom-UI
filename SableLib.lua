@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.8-big"
+SableLib.Version = "1.9-exact"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -108,17 +108,17 @@ local function create(className, props, children)
 end
 
 local COLORS = {
-	ContentBG  = Color3.fromRGB(19, 20, 27),
-	RowBG      = Color3.fromRGB(27, 30, 39),
-	RowStroke  = Color3.fromRGB(39, 43, 56),
-	PillBG     = Color3.fromRGB(26, 29, 38),
-	PillActive = Color3.fromRGB(34, 38, 50),
+	ContentBG  = Color3.fromRGB(16, 17, 22),
+	RowBG      = Color3.fromRGB(24, 25, 32),
+	RowStroke  = Color3.fromRGB(38, 39, 47),
+	PillBG     = Color3.fromRGB(24, 25, 32),
+	PillActive = Color3.fromRGB(33, 34, 44),
 	Text       = Color3.fromRGB(255, 255, 255),
-	Sub        = Color3.fromRGB(144, 149, 164),
-	Beige      = Color3.fromRGB(242, 226, 184),
+	Sub        = Color3.fromRGB(142, 144, 153),
+	Beige      = Color3.fromRGB(232, 217, 176),
 	BeigeText  = Color3.fromRGB(25, 25, 25),
-	TrackOff   = Color3.fromRGB(43, 47, 61),
-	Knob       = Color3.fromRGB(198, 203, 216),
+	TrackOff   = Color3.fromRGB(35, 36, 44),
+	Knob       = Color3.fromRGB(201, 204, 212),
 	Dark       = Color3.fromRGB(15, 16, 21),
 }
 
@@ -229,11 +229,11 @@ function SableLib:CreateWindow(opts)
 		Name = "Content",
 		Parent = main,
 		Position = UDim2.new(0, 0, 0, 62),
-		Size = UDim2.new(1, 0, 1, -62 - 82),
+		Size = UDim2.new(1, 0, 1, -180),
 		BackgroundColor3 = COLORS.ContentBG,
 		BorderSizePixel = 0,
 	})
-	corner(contentCard, 12)
+	corner(contentCard, 20)
 	stroke(contentCard, COLORS.RowStroke, 1, 0.25)
 
 	local scroll = create("ScrollingFrame", {
@@ -242,13 +242,13 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 3,
-		ScrollBarImageColor3 = Color3.fromRGB(60, 65, 80),
+		ScrollBarThickness = 5,
+		ScrollBarImageColor3 = Color3.fromRGB(105, 107, 115),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	})
-	padding(scroll, 0, 6, 0, 6)
+	padding(scroll, 0, 8, 0, 0)
 	create("UIListLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
@@ -259,14 +259,14 @@ function SableLib:CreateWindow(opts)
 	local chev = create("TextButton", {
 		Name = "ScrollHint",
 		Parent = main,
-		AnchorPoint = Vector2.new(0.5, 1),
-		Position = UDim2.new(0.5, 0, 1, -76),
-		Size = UDim2.fromOffset(48, 20),
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 1, -105),
+		Size = UDim2.fromOffset(48, 24),
 		BackgroundTransparency = 1,
 		Text = "v",
 		Font = Enum.Font.GothamBold,
-		TextSize = 18,
-		TextColor3 = COLORS.Sub,
+		TextSize = 22,
+		TextColor3 = Color3.fromRGB(255, 255, 255),
 		AutoButtonColor = false,
 	})
 	local function updateChev()
@@ -292,23 +292,23 @@ function SableLib:CreateWindow(opts)
 		Parent = main,
 		AnchorPoint = Vector2.new(0, 1),
 		Position = UDim2.new(0, 0, 1, 0),
-		Size = UDim2.new(1, 0, 0, 72),
+		Size = UDim2.new(1, 0, 0, 92),
 		BackgroundTransparency = 1,
 	})
 	local navBg = create("Frame", {
 		Name = "NavBg",
 		Parent = bottomBar,
 		Position = UDim2.new(0, 0, 0, 0),
-		Size = UDim2.new(1, 0, 0, 72),
-		BackgroundColor3 = Color3.fromRGB(17, 19, 26),
+		Size = UDim2.new(1, 0, 0, 92),
+		BackgroundColor3 = Color3.fromRGB(16, 17, 22),
 		BorderSizePixel = 0,
 	})
-	corner(navBg, 28)
+	corner(navBg, 40)
 	stroke(navBg, COLORS.RowStroke, 1, 0.35)
 	local logo = create("TextLabel", {
 		Parent = bottomBar,
 		Size = UDim2.fromOffset(96, 56),
-		Position = UDim2.new(0, 18, 0, 8),
+		Position = UDim2.new(0, 24, 0, 18),
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = Enum.Font.GothamBold,
@@ -316,11 +316,20 @@ function SableLib:CreateWindow(opts)
 		TextColor3 = COLORS.Beige,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
+	create("Frame", {
+		Name = "LogoSep",
+		Parent = bottomBar,
+		Position = UDim2.new(0, 128, 0, 20),
+		Size = UDim2.new(0, 1, 0, 52),
+		BackgroundColor3 = COLORS.RowStroke,
+		BackgroundTransparency = 0.3,
+		BorderSizePixel = 0,
+	})
 	local navScroll = create("ScrollingFrame", {
 		Name = "NavScroll",
 		Parent = bottomBar,
-		Position = UDim2.new(0, 122, 0, 8),
-		Size = UDim2.new(1, -134, 0, 56),
+		Position = UDim2.new(0, 140, 0, 18),
+		Size = UDim2.new(1, -152, 0, 56),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
@@ -558,7 +567,7 @@ function SableLib:CreateWindow(opts)
 			ClipsDescendants = true,
 			LayoutOrder = #self._tabs + 1,
 		})
-		corner(pill, 17)
+		corner(pill, 15)
 		stroke(pill, COLORS.RowStroke, 1, 0.3)
 		create("UIListLayout", {
 			Parent = pill,
@@ -679,7 +688,7 @@ function SableLib:CreateWindow(opts)
 				Visible = isOwnTabSelected,
 				LayoutOrder = #win._pages + 1,
 			})
-			corner(topPill, 18)
+			corner(topPill, 16)
 			stroke(topPill, COLORS.RowStroke, 1, 0.3)
 			buildPillContent(topPill, pageIcon, pageName, false)
 
@@ -726,14 +735,14 @@ function SableLib:CreateWindow(opts)
 					BorderSizePixel = 0,
 					Visible = (win._currentPage == Page),
 				})
-				padding(row, 14, 10, 14, 10)
+				padding(row, 22, 14, 22, 14)
 				create("Frame", {
 					Parent = row,
 					AnchorPoint = Vector2.new(0, 1),
-					Position = UDim2.new(0, -14, 1, 0),
-					Size = UDim2.new(1, 28, 0, 1),
+					Position = UDim2.new(0, -22, 1, 0),
+					Size = UDim2.new(1, 44, 0, 1),
 					BackgroundColor3 = COLORS.RowStroke,
-					BackgroundTransparency = 0.35,
+					BackgroundTransparency = 0.3,
 					BorderSizePixel = 0,
 				})
 				table.insert(Page.Rows, row)
@@ -748,7 +757,7 @@ function SableLib:CreateWindow(opts)
 					BackgroundTransparency = 1,
 					Text = tOpts.Name or "Toggle",
 					Font = Enum.Font.GothamBold,
-					TextSize = 17,
+					TextSize = 16,
 					TextColor3 = COLORS.Text,
 					TextXAlignment = Enum.TextXAlignment.Left,
 				})
@@ -759,7 +768,7 @@ function SableLib:CreateWindow(opts)
 					BackgroundTransparency = 1,
 					Text = tOpts.Description or "",
 					Font = Enum.Font.Gotham,
-					TextSize = 14,
+					TextSize = 13,
 					TextColor3 = COLORS.Sub,
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextYAlignment = Enum.TextYAlignment.Top,
@@ -777,20 +786,21 @@ function SableLib:CreateWindow(opts)
 					AutoButtonColor = false,
 				})
 				corner(track, 17)
+				stroke(track, COLORS.RowStroke, 1, 0.5)
 				local knob = create("Frame", {
 					Parent = track,
 					AnchorPoint = Vector2.new(0, 0.5),
-					Position = state and UDim2.new(1, -30, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
-					Size = UDim2.fromOffset(26, 26),
+					Position = state and UDim2.new(1, -32, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+					Size = UDim2.fromOffset(28, 28),
 					BackgroundColor3 = state and COLORS.BeigeText or COLORS.Knob,
 					BorderSizePixel = 0,
 				})
-				corner(knob, 13)
+				corner(knob, 14)
 
 				local function update()
 					TweenService:Create(track, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
 					TweenService:Create(knob, TweenInfo.new(0.18), {
-						Position = state and UDim2.new(1, -30, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
+						Position = state and UDim2.new(1, -32, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
 						BackgroundColor3 = state and COLORS.BeigeText or COLORS.Knob,
 					}):Play()
 				end
