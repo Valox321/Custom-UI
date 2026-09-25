@@ -295,16 +295,6 @@ function SableLib:CreateWindow(opts)
 
 	makeDraggable(main, { topBar, contentCard, bottomBar })
 
-	-- toggle visibility
-	local visible = true
-	UserInputService.InputBegan:Connect(function(input, gpe)
-		if gpe then return end
-		if input.KeyCode == toggleKey then
-			visible = not visible
-			gui.Enabled = visible
-		end
-	end)
-
 	local Window = {}
 	Window.Gui = gui
 	Window.Main = main
@@ -316,6 +306,28 @@ function SableLib:CreateWindow(opts)
 	Window._navScroll = navScroll
 	Window._currentTab = nil
 	Window._currentPage = nil
+	Window._toggleKey = toggleKey
+	Window._visible = true
+
+	-- Menü-Taste zur Laufzeit ändern, z.B. Window:SetToggleKey(Enum.KeyCode.T)
+	function Window:SetToggleKey(key)
+		if typeof(key) == "EnumItem" then
+			self._toggleKey = key
+		end
+	end
+	function Window:Toggle()
+		self._visible = not self._visible
+		gui.Enabled = self._visible
+	end
+
+	-- toggle visibility (nutzt Window._toggleKey, damit Keybinds sie ändern können)
+	UserInputService.InputBegan:Connect(function(input, gpe)
+		if gpe then return end
+		if input.KeyCode == Window._toggleKey then
+			Window._visible = not Window._visible
+			gui.Enabled = Window._visible
+		end
+	end)
 
 	local function stylePill(btn, active)
 		btn.BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG

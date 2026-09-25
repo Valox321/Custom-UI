@@ -114,8 +114,8 @@ P5:AddInput({ Name = "Name", Description = "Zweites Input.", Placeholder = "Type
 
 local P6 = KeyTab:CreatePage({ Name = "Keybinds", Icon = "command" })
 P6:AddSection({ Name = "Keybind" })
-P6:AddKeybind({ Name = "Farm Key", Description = "Klick auf Taste, dann neue Taste drücken.", Default = Enum.KeyCode.F, Callback = print })
-P6:AddKeybind({ Name = "Menu Key", Description = "Zweiter Keybind.", Default = Enum.KeyCode.RightShift, Callback = print })
+P6:AddKeybind({ Name = "Farm Key", Description = "Nur Aktion, kein Menü-Toggle.", Default = Enum.KeyCode.F, Callback = print })
+P6:AddKeybind({ Name = "Menu Key", Description = "Stellt die Menü-Taste um.", Default = Enum.KeyCode.RightShift, Callback = function(k) Window:SetToggleKey(k) Window:Notify({ Title = "sable", Description = "Menu key: " .. k.Name }) end })
 
 local P7 = ColorTab:CreatePage({ Name = "Colors", Icon = "palette" })
 P7:AddSection({ Name = "Colorpicker" })
