@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.35"
+SableLib.Version = "1.36"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -623,6 +623,21 @@ local function stroke(parent, color, thickness, transparency)
 	})
 end
 
+-- UI-Glow (nur UI, kein Blur): weicher Violett-Schein um ein Element (Top-Level, jederzeit aufrufbar)
+local function glowStroke(parent, color)
+	local g = parent:FindFirstChild("SableGlow")
+	if not g then
+		g = Instance.new("UIStroke")
+		g.Name = "SableGlow"
+		g.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+		g.Thickness = 2
+		g.Transparency = 1
+		g.Parent = parent
+	end
+	g.Color = color or COLORS.Beige
+	return g
+end
+
 local function padding(parent, l, t, r, b)
 	return create("UIPadding", {
 		PaddingLeft = UDim.new(0, l or 12),
@@ -1175,21 +1190,6 @@ function SableLib:CreateWindow(opts)
 			gui.Enabled = Window._visible
 		end
 	end)
-
-	-- UI-Glow (nur UI, kein Blur): legt einen weichen Violett-Schein um ein Element
-	local function glowStroke(parent, color)
-		local g = parent:FindFirstChild("SableGlow")
-		if not g then
-			g = Instance.new("UIStroke")
-			g.Name = "SableGlow"
-			g.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
-			g.Thickness = 2
-			g.Transparency = 1
-			g.Parent = parent
-		end
-		g.Color = color or COLORS.Beige
-		return g
-	end
 
 	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
 	local function sideStyle(btn, active)
