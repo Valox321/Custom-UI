@@ -5,11 +5,13 @@
 --//   Icon: Lucide-Name ("settings"), rbxassetid://... oder Asset-ID ("121040200759967")
 --//   + Window:SetTopIcon("crown") wechselt das Logo zur Laufzeit
 --// local Tab = Window:CreateTab({ Name = "Main", Icon = "+" })
+--// Sections: local Farm = Window:CreateSection("Auto Farm")
+--//            Window:CreateTab({ Name = "Money", Icon = "coins", Section = Farm })
 --// local Page = Tab:CreatePage({ Name = "Level Up", Icon = "" })
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.14-shot"
+SableLib.Version = "1.17-sections"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -951,6 +953,27 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 
+	-- Sidebar-Section (Gruppen-Label), z.B. "MODULES" oder custom "AUTO FARM"
+	-- Wird automatisch angelegt; CreateSection legt sie vorab an (Reihenfolge!)
+	local function ensureGroup(win, group)
+		group = tostring(group or "MODULES")
+		if win._groups[group] then return group end
+		win._groups[group] = true
+		win._sideOrder = win._sideOrder + 1
+		create("TextLabel", {
+			Parent = win._sideList,
+			Size = UDim2.new(1, 0, 0, 24),
+			BackgroundTransparency = 1,
+			Text = "  " .. string.upper(group),
+			Font = Enum.Font.GothamMedium,
+			TextSize = 11,
+			TextColor3 = COLORS.Sub,
+			TextXAlignment = Enum.TextXAlignment.Left,
+			LayoutOrder = win._sideOrder,
+		})
+		return group
+	end
+
 	-- Header: "<n> modules - <m> enabled"
 	local function refreshHeader(win)
 		local tab = win._currentTab
@@ -973,6 +996,14 @@ function SableLib:CreateWindow(opts)
 	-- Sidebar-Navigation (Screenshot): Tabs links, Pages als Sections im Content
 	-- creates a top pill page holder in advance, actual rows live in one shared scroll
 	-- we switch visibility per page by storing row frames
+	-- Sidebar-Section anlegen, z.B. local Farm = Window:CreateSection("Auto Farm")
+	-- Tabs landen per CreateTab({ Section = Farm }) oder ({ Section = "Auto Farm" }) darin.
+	-- (Group = ... geht weiterhin als Alias.)
+	function Window:CreateSection(name)
+		local group = ensureGroup(self, name)
+		return { Name = group }
+	end
+
 	-- Icon kann sein: "crown" / "swords" / "skull" (lucide-name) ODER "rbxassetid://..." ODER emoji-text
 	function Window:CreateTab(tabOpts)
 		tabOpts = tabOpts or {}
@@ -980,22 +1011,9 @@ function SableLib:CreateWindow(opts)
 		local icon = tabOpts.Icon or "home"
 
 		local isActive = (#self._tabs == 0)
-		local group = tabOpts.Group or "MODULES"
-		if not self._groups[group] then
-			self._groups[group] = true
-			self._sideOrder = self._sideOrder + 1
-			create("TextLabel", {
-				Parent = self._sideList,
-				Size = UDim2.new(1, 0, 0, 24),
-				BackgroundTransparency = 1,
-				Text = "  " .. string.upper(group),
-				Font = Enum.Font.GothamMedium,
-				TextSize = 11,
-				TextColor3 = COLORS.Sub,
-				TextXAlignment = Enum.TextXAlignment.Left,
-				LayoutOrder = self._sideOrder,
-			})
-		end
+		local sec = tabOpts.Section or tabOpts.Group
+		if typeof(sec) == "table" and sec.Name then sec = sec.Name end
+		local group = ensureGroup(self, sec or "MODULES")
 		self._sideOrder = self._sideOrder + 1
 		local btn = create("TextButton", {
 			Parent = self._sideList,
