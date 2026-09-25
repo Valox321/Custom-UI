@@ -11,7 +11,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.18"
+SableLib.Version = "1.19"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -771,14 +771,14 @@ function SableLib:CreateWindow(opts)
 	})
 	corner(searchFrame, 10)
 	stroke(searchFrame, COLORS.RowStroke, 1, 0.3)
-	create("TextLabel", {
+	create("ImageLabel", {
 		Parent = searchFrame,
-		Size = UDim2.new(0, 36, 1, 0),
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(16, 16),
 		BackgroundTransparency = 1,
-		Text = "⌕",
-		Font = Enum.Font.GothamBold,
-		TextSize = 15,
-		TextColor3 = COLORS.Sub,
+		Image = SableLib:ResolveIcon("search") or "",
+		ImageColor3 = COLORS.Sub,
 	})
 	local searchBox = create("TextBox", {
 		Parent = searchFrame,
@@ -799,14 +799,31 @@ function SableLib:CreateWindow(opts)
 		Position = UDim2.new(0, 0, 0, 58),
 		Size = UDim2.fromOffset(84, 26),
 		BackgroundTransparency = 1,
-		Text = "‹ Back",
-		Font = Enum.Font.GothamMedium,
-		TextSize = 13,
-		TextColor3 = COLORS.Sub,
+		Text = "",
 		AutoButtonColor = false,
 	})
 	corner(backBtn, 13)
 	stroke(backBtn, COLORS.RowStroke, 1, 0.5)
+	create("ImageLabel", {
+		Parent = backBtn,
+		AnchorPoint = Vector2.new(0, 0.5),
+		Position = UDim2.new(0, 10, 0.5, 0),
+		Size = UDim2.fromOffset(14, 14),
+		BackgroundTransparency = 1,
+		Image = SableLib:ResolveIcon("chevron-left") or "",
+		ImageColor3 = COLORS.Sub,
+	})
+	create("TextLabel", {
+		Parent = backBtn,
+		Position = UDim2.new(0, 28, 0, 0),
+		Size = UDim2.new(1, -36, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "Back",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 13,
+		TextColor3 = COLORS.Sub,
+		TextXAlignment = Enum.TextXAlignment.Left,
+	})
 	local card = create("Frame", {
 		Name = "Card",
 		Parent = content,
