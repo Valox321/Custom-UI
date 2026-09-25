@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.27"
+SableLib.Version = "1.28"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -872,6 +872,43 @@ function SableLib:CreateWindow(opts)
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 0),
+	})
+
+	-- Ambienter Hintergrund-Glow wie Referenz (violett oben rechts, blau unten links)
+	-- Liegt ganz oben (sehr transparent), damit er auch auf Sidebar/Card scheint
+	local auraTop = create("Frame", {
+		Parent = main,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(124, 106, 255),
+		BackgroundTransparency = 0.9,
+		BorderSizePixel = 0,
+	})
+	corner(auraTop, 14)
+	create("UIGradient", {
+		Parent = auraTop,
+		Rotation = 35,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.82),
+			NumberSequenceKeypoint.new(0.55, 0.96),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
+	})
+	local auraBlue = create("Frame", {
+		Parent = main,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(50, 80, 220),
+		BackgroundTransparency = 0.93,
+		BorderSizePixel = 0,
+	})
+	corner(auraBlue, 14)
+	create("UIGradient", {
+		Parent = auraBlue,
+		Rotation = 215,
+		Transparency = NumberSequence.new({
+			NumberSequenceKeypoint.new(0, 0.86),
+			NumberSequenceKeypoint.new(0.6, 0.98),
+			NumberSequenceKeypoint.new(1, 1),
+		}),
 	})
 
 	makeDraggable(main, { logoRow, header })
