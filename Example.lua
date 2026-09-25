@@ -1,6 +1,6 @@
 --// sable example: Elements-Galerie (SableLib 1.18+)
 --// Je ein Tab pro Control-Typ in der Section "ELEMENTS"
-local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua?x=" .. tick()))()
+local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua?x=" .. tick(), true))()
 print("[sable] lib version:", Sable.Version or "?")
 
 local Window = Sable:CreateWindow({
