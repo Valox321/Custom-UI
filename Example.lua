@@ -7,9 +7,6 @@ local Window = Sable:CreateWindow({
 	ToggleKey = Enum.KeyCode.RightShift,
 })
 print("[sable] lib version:", Sable.Version or "?")
-if Window.SetTopIcon then
-	Window:SetTopIcon("headphones")
-end
 
 -- BOTTOM NAV: pro Feature ein Tab (Lucide-Namen, Übersicht: https://lucide.dev/icons)
 local Main = Window:CreateTab({ Name = "Main", Icon = "house" })
