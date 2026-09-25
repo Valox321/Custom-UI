@@ -26,6 +26,24 @@ Window:CreateTab({ Name = "Configs", Icon = "folder", Group = "GENERAL" })
 Window:CreateTab({ Name = "Socials", Icon = "users", Group = "GENERAL" })
 Window:CreateTab({ Name = "Keybinds", Icon = "keyboard", Group = "GENERAL" })
 
+-- Eigene Section statt MODULES/GENERAL (String oder Handle)
+local Farm = Window:CreateSection("Auto Farm")
+local Money = Window:CreateTab({ Name = "Money", Title = "Money Modules", Icon = "coins", Count = 8, Section = Farm })
+Window:CreateTab({ Name = "Crops", Icon = "wheat", Count = 5, Section = "Auto Farm" })
+
+local MoneyPage = Money:CreatePage({ Name = "Auto Farm" })
+MoneyPage:AddToggle({
+	Name = "Auto Collect",
+	Description = "Collects money automatically.",
+	Default = true,
+	Callback = print,
+})
+MoneyPage:AddSlider({
+	Name = "Radius",
+	Min = 0, Max = 100, Default = 25,
+	Callback = function(v) print("Radius:", v) end,
+})
+
 -- Combat-Module (Rows wie im Screenshot)
 local AutoCrystal = Combat:CreatePage({ Name = "Auto Crystal" })
 
