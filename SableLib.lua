@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.39"
+SableLib.Version = "1.40"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -744,12 +744,21 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 0.92,
 		BorderSizePixel = 0,
 	})
-	local shadow = create("Frame", {
-		Name = "Shadow",
+	local container = create("Frame", {
+		Name = "Window",
 		Parent = gui,
 		AnchorPoint = Vector2.new(0.5, 0.5),
-		Position = UDim2.new(0.5, 0, 0.5, 6),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = opts.Size or UDim2.fromOffset(940, 600),
+		BackgroundTransparency = 1,
+		BorderSizePixel = 0,
+	})
+	local shadow = create("Frame", {
+		Name = "Shadow",
+		Parent = container,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 6),
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
 		BackgroundTransparency = 0.75,
 		BorderSizePixel = 0,
@@ -757,10 +766,10 @@ function SableLib:CreateWindow(opts)
 	corner(shadow, 20)
 	local main = create("Frame", {
 		Name = "Main",
-		Parent = gui,
+		Parent = container,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
-		Size = opts.Size or UDim2.fromOffset(940, 600),
+		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = COLORS.MainBG,
 		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
@@ -1107,7 +1116,7 @@ function SableLib:CreateWindow(opts)
 		}),
 	})
 
-	makeDraggable(main, { logoRow, header })
+	makeDraggable(container, { logoRow, header })
 
 	local Window = {}
 	Window.Gui = gui
