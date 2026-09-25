@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.36"
+SableLib.Version = "1.37"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1125,9 +1125,6 @@ function SableLib:CreateWindow(opts)
 	end)
 	listBtn.MouseButton1Click:Connect(function() Window:SetView("list") end)
 	gridBtn.MouseButton1Click:Connect(function() Window:SetView("grid") end)
-	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
-		applyFilter(Window)
-	end)
 	backBtn.MouseButton1Click:Connect(function()
 		local h = Window._history
 		if #h == 0 then return end
@@ -1158,12 +1155,6 @@ function SableLib:CreateWindow(opts)
 		else
 			self._chipBtn.Visible = false
 		end
-	end
-	function Window:SetView(v)
-		v = (v == "grid") and "grid" or "list"
-		if self._view == v then return end
-		self._view = v
-		applyView(self, true)
 	end
 	function Window:GetView() return self._view end
 	-- Sidebar-Logo-Icon zur Laufzeit wechseln, z.B. Window:SetTopIcon("crown")
@@ -1292,6 +1283,14 @@ function SableLib:CreateWindow(opts)
 		styleViewBtns(win)
 		if animate then animateCards(win) end
 	end
+
+	function Window:SetView(v)
+		v = (v == "grid") and "grid" or "list"
+		if self._view == v then return end
+		self._view = v
+		applyView(self, true)
+	end
+	function Window:GetView() return self._view end
 
 	-- Sidebar-Section (Gruppen-Label), z.B. "MODULES" oder custom "AUTO FARM"
 	-- Wird automatisch angelegt; CreateSection legt sie vorab an (Reihenfolge!)
@@ -2891,6 +2890,9 @@ function SableLib:CreateWindow(opts)
 		end)
 	end
 
+	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
+		applyFilter(Window)
+	end)
 	styleViewBtns(Window)
 	return Window
 end
