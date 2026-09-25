@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.41"
+SableLib.Version = "1.42"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1232,9 +1232,14 @@ function SableLib:CreateWindow(opts)
 	Window._visible = true
 
 	-- Menü-Taste zur Laufzeit ändern, z.B. Window:SetToggleKey(Enum.KeyCode.T)
+	-- nil/kein Arg loescht den Toggle-Key (danach toggelt nichts mehr).
 	function Window:SetToggleKey(key)
-		if typeof(key) == "EnumItem" then
+		if key == nil then
+			self._toggleKey = nil
+			self._uiToggleKey = nil
+		elseif typeof(key) == "EnumItem" then
 			self._toggleKey = key
+			self._uiToggleKey = key
 		end
 	end
 	function Window:Toggle()
@@ -1265,6 +1270,8 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 	function Window:GetView() return self._view end
+	-- Alias: zentrale Toggle-Funktion (Open/Close mit Animation, Shadow/Glow synchron)
+	Window.ToggleUI = Window.Toggle
 	-- Sidebar-Logo-Icon zur Laufzeit wechseln, z.B. Window:SetTopIcon("crown")
 	function Window:SetTopIcon(iconName)
 		local img = SableLib:ResolveIcon(iconName or "headphones")
@@ -1281,12 +1288,27 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 
-	-- toggle visibility (nutzt Window._toggleKey, damit Keybinds sie ändern können)
+	-- Zentraler UI-Toggle-Keybind: genau EINE Connection, liest den Key dynamisch.
+	-- gpe=true (z.B. Chat/TextBox) wird ignoriert; Debounce gegen Doppel-Feuer.
+	Window._uiToggleKey = toggleKey
+	Window._lastToggleAt = 0
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
-		if input.KeyCode == Window._toggleKey then
-			Window:Toggle()
+		local key = Window._uiToggleKey
+		if key == nil then return end
+		local hit = false
+		if typeof(key) == "EnumItem" then
+			if key.EnumType == Enum.KeyCode then
+				hit = (input.KeyCode ~= Enum.KeyCode.Unknown and input.KeyCode == key)
+			else
+				hit = (input.UserInputType == key)
+			end
 		end
+		if not hit then return end
+		local now = os.clock()
+		if now - Window._lastToggleAt < 0.2 then return end
+		Window._lastToggleAt = now
+		Window:Toggle()
 	end)
 
 	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
@@ -2592,6 +2614,19 @@ function SableLib:CreateWindow(opts)
 				stroke(btn, COLORS.RowStroke, 1, 0.2)
 				glossBg(btn)
 				pressify(btn)
+				-- UI-Bindung: mit UI = true steuert dieser Keybind den zentralen
+				-- UI-Toggle-Key (dynamisch, Backspace/Delete entfernt ihn wieder).
+				local uiBound = kOpts.UI == true or kOpts.ToggleUI == true
+				local function applyKey(v, fire)
+					current = v
+					btn.Text = (v == nil) and "None" or keyName(v)
+					if uiBound then win._uiToggleKey = v end
+					if fire and kOpts.Callback then
+						local ok, err = pcall(kOpts.Callback, current)
+						if not ok then warn("[sable] keybind callback error: " .. tostring(err)) end
+					end
+				end
+				if uiBound and current ~= nil then win._uiToggleKey = current end
 				local listening = false
 				btn.MouseButton1Click:Connect(function()
 					listening = true
@@ -2602,15 +2637,16 @@ function SableLib:CreateWindow(opts)
 				-- Beim Binden (listening) wird gpe ignoriert, damit jede Taste übernommen wird.
 				UserInputService.InputBegan:Connect(function(input, gpe)
 					if listening then
+						if input.KeyCode == Enum.KeyCode.Backspace or input.KeyCode == Enum.KeyCode.Delete then
+							listening = false
+							glowStroke(btn).Transparency = 1
+							applyKey(nil, true)
+							return
+						end
 						if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
 							listening = false
 							glowStroke(btn).Transparency = 1
-							current = input.KeyCode
-							btn.Text = keyName(current)
-							if kOpts.Callback then
-								local ok, err = pcall(kOpts.Callback, current)
-								if not ok then warn("[sable] keybind callback error: " .. tostring(err)) end
-							end
+							applyKey(input.KeyCode, true)
 						end
 					elseif not gpe and input.KeyCode == current then
 						if kOpts.Callback then
@@ -2620,7 +2656,7 @@ function SableLib:CreateWindow(opts)
 					end
 				end)
 				local api = {}
-				function api:Set(k) current = k btn.Text = keyName(k) end
+				function api:Set(k) applyKey(k, false) end
 				function api:Get() return current end
 				return api
 			end

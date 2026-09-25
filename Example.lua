@@ -47,7 +47,7 @@ InpPage:AddInput({ Name = "Username", Description = "Callback bei Enter.", Defau
 
 local KeyTab = Window:CreateTab({ Name = "Keybind", Icon = "zap", Section = "Elements" })
 local KeyPage = KeyTab:CreatePage({ Name = "Keybind" })
-KeyPage:AddKeybind({ Name = "Toggle UI", Description = "Klick, dann Taste druecken.", Default = Enum.KeyCode.RightShift, Callback = function(k) print("Key:", k) end })
+KeyPage:AddKeybind({ Name = "Toggle UI", Description = "Steuert das UI (T/F testen).", Default = Enum.KeyCode.RightShift, UI = true, Callback = function(k) print("Key:", k) end })
 
 local ColTab = Window:CreateTab({ Name = "Color", Icon = "paintbrush", Section = "Elements" })
 local ColPage = ColTab:CreatePage({ Name = "Colorpicker" })
