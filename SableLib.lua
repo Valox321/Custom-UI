@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.29"
+SableLib.Version = "1.30"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1110,7 +1110,6 @@ function SableLib:CreateWindow(opts)
 	end)
 	listBtn.MouseButton1Click:Connect(function() Window:SetView("list") end)
 	gridBtn.MouseButton1Click:Connect(function() Window:SetView("grid") end)
-	styleViewBtns(Window)
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		applyFilter(Window)
 	end)
@@ -2872,6 +2871,7 @@ function SableLib:CreateWindow(opts)
 		end)
 	end
 
+	styleViewBtns(Window)
 	return Window
 end
 
