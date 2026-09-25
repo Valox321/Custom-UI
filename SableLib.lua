@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.42"
+SableLib.Version = "1.43"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -689,7 +689,7 @@ end
 
 -- Zentrales Motion-System: dezent, konsistent, konfigurierbar
 SableLib.Motion = {
-	HoverDuration = 0.15,
+	HoverDuration = 0.12,
 	PressDuration = 0.08,
 	OpenDuration = 0.22,
 	CloseDuration = 0.18,
@@ -711,6 +711,25 @@ local function ensureScale(obj)
 	if not s then s = Instance.new("UIScale"); s.Scale = 1; s.Parent = obj end
 	return s
 end
+local function hoverify(btn)
+	if btn:GetAttribute("SableHover") then return end
+	btn:SetAttribute("SableHover", true)
+	btn.MouseEnter:Connect(function()
+		glowStroke(btn).Transparency = 0.7
+		local st = btn:FindFirstChildOfClass("UIStroke")
+		if st and st.Name ~= "SableGlow" then
+			if btn:GetAttribute("SableBT0") == nil then btn:SetAttribute("SableBT0", st.Transparency) end
+			tw(st, Motion.HoverDuration, { Transparency = math.max((btn:GetAttribute("SableBT0") or 0.3) - 0.15, 0) })
+		end
+	end)
+	btn.MouseLeave:Connect(function()
+		glowStroke(btn).Transparency = 1
+		local st = btn:FindFirstChildOfClass("UIStroke")
+		if st and st.Name ~= "SableGlow" and btn:GetAttribute("SableBT0") ~= nil then
+			tw(st, Motion.HoverDuration, { Transparency = btn:GetAttribute("SableBT0") })
+		end
+	end)
+end
 local function pressify(btn)
 	if btn:GetAttribute("SablePress") then return end
 	btn:SetAttribute("SablePress", true)
@@ -728,6 +747,7 @@ local function pressify(btn)
 	btn.MouseLeave:Connect(function()
 		tw(sc, Motion.PressDuration, { Scale = 1 })
 	end)
+	hoverify(btn)
 end
 function SableLib:CreateWindow(opts)
 	opts = opts or {}
@@ -995,13 +1015,16 @@ function SableLib:CreateWindow(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 	})
+	local searchBorder = searchFrame:FindFirstChildOfClass("UIStroke")
 	searchBox.Focused:Connect(function()
 		tw(searchFrame, Motion.HoverDuration, { BackgroundColor3 = COLORS.RowBG })
 		glowStroke(searchFrame).Transparency = 0.6
+		if searchBorder then tw(searchBorder, 0.12, { Transparency = 0.15 }) end
 	end)
 	searchBox.FocusLost:Connect(function()
 		tw(searchFrame, Motion.HoverDuration, { BackgroundColor3 = COLORS.ContentBG })
 		glowStroke(searchFrame).Transparency = 0.85
+		if searchBorder then tw(searchBorder, 0.12, { Transparency = 0.3 }) end
 	end)
 	local backBtn = create("TextButton", {
 		Parent = header,
@@ -1195,6 +1218,7 @@ function SableLib:CreateWindow(opts)
 	Window._tabs = {}
 	Window._pages = {}
 	Window._scroll = scroll
+	Window._cardHome = card.Position
 	Window._sideList = sideScroll
 	Window._groups = {}
 	Window._sideOrder = 0
@@ -1248,13 +1272,18 @@ function SableLib:CreateWindow(opts)
 			gui.Enabled = true
 			local sc = ensureScale(container)
 			sc.Scale = 0.97
+			container.Position = UDim2.new(0.5, 0, 0.5, 6)
 			tw(sc, 0.15, { Scale = 1 })
+			tw(container, 0.15, { Position = UDim2.new(0.5, 0, 0.5, 0) })
+			tw(shadow, 0.15, { BackgroundTransparency = 0.75 })
 		else
 			local sc = ensureScale(container)
-			tw(sc, 0.12, { Scale = 0.97 })
+			tw(sc, 0.16, { Scale = 0.98 })
+			tw(container, 0.16, { Position = UDim2.new(0.5, 0, 0.5, 6) })
+			tw(shadow, 0.16, { BackgroundTransparency = 1 })
 			local tok = (self._togTok or 0) + 1
 			self._togTok = tok
-			task.delay(0.12, function()
+			task.delay(0.16, function()
 				if self._togTok == tok and not self._visible then
 					gui.Enabled = false
 				end
@@ -1313,16 +1342,16 @@ function SableLib:CreateWindow(opts)
 
 	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
 	local function sideStyle(btn, active)
-		TweenService:Create(btn, TweenInfo.new(0.18), {
+		tw(btn, 0.18, {
 			BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG,
 			BackgroundTransparency = active and 0.15 or 1,
-		}):Play()
+		})
 		glowStroke(btn).Transparency = active and 0.7 or 1
 		for _, ch in ipairs(btn:GetDescendants()) do
 			if ch:IsA("TextLabel") then
-				ch.TextColor3 = active and COLORS.Text or COLORS.Sub
+				tw(ch, 0.15, { TextColor3 = active and COLORS.Text or COLORS.Sub })
 			elseif ch:IsA("ImageLabel") then
-				ch.ImageColor3 = active and COLORS.Text or COLORS.Sub
+				tw(ch, 0.15, { ImageColor3 = active and COLORS.Text or COLORS.Sub })
 			end
 		end
 	end
@@ -1378,6 +1407,18 @@ function SableLib:CreateWindow(opts)
 	end
 
 	-- Section-Labels (nur sichtbar wenn Tab >1 Page hat)
+	local function fadeRowsOut(win)
+		if not win._currentPage then return end
+		for _, r in ipairs(win._currentPage.Rows) do
+			if r.Visible then
+				tw(r, 0.09, { BackgroundTransparency = 1 })
+				for _, d in ipairs(r:GetDescendants()) do
+					if d:IsA("TextLabel") then tw(d, 0.09, { TextTransparency = 1 })
+					elseif d:IsA("ImageLabel") then tw(d, 0.09, { ImageTransparency = 1 }) end
+				end
+			end
+		end
+	end
 	local function syncPages(win)
 		for _, p in ipairs(win._pages) do
 			if p.LabelRow then
@@ -1394,8 +1435,6 @@ function SableLib:CreateWindow(opts)
 			if r.Visible and r:GetAttribute("CardBG") then
 				n = n + 1
 				if n > 14 then break end
-				local sc = ensureScale(r)
-				sc.Scale = 0.97
 				r.BackgroundTransparency = 1
 				local st = r:FindFirstChildOfClass("UIStroke")
 				if st then st.Transparency = 1 end
@@ -1409,11 +1448,10 @@ function SableLib:CreateWindow(opts)
 						texts[#texts + 1] = d
 					end
 				end
-				local row, d = r, (n - 1) * 0.03
+				local row, d = r, math.min((n - 1) * 0.025, 0.08)
 				task.delay(d, function()
 					if not row.Parent then return end
 					tw(row, 0.25, { BackgroundTransparency = 0 })
-					tw(sc, 0.25, { Scale = 1 })
 					local s2 = row:FindFirstChildOfClass("UIStroke")
 					if s2 then tw(s2, 0.25, { Transparency = 0.3 }) end
 					for _, t2 in ipairs(texts) do
@@ -1466,7 +1504,13 @@ function SableLib:CreateWindow(opts)
 		local tok = win._viewToken
 		if win._currentPage then
 			for _, r in ipairs(win._currentPage.Rows) do
-				if r.Visible then tw(r, 0.07, { BackgroundTransparency = 1 }) end
+				if r.Visible then
+					tw(r, 0.07, { BackgroundTransparency = 1 })
+					for _, d in ipairs(r:GetDescendants()) do
+						if d:IsA("TextLabel") then tw(d, 0.07, { TextTransparency = 1 })
+						elseif d:IsA("ImageLabel") then tw(d, 0.07, { ImageTransparency = 1 }) end
+					end
+				end
 			end
 		end
 		task.delay(0.08, function()
@@ -1638,6 +1682,13 @@ function SableLib:CreateWindow(opts)
 		local function selectTab(target, fromBack, pageOverride)
 			local win = target.ParentWindow
 			closeAllPopups(win)
+			win._switchTok = (win._switchTok or 0) + 1
+			local stok = win._switchTok
+			local home = win._cardHome or card.Position
+			fadeRowsOut(win)
+			tw(card, 0.09, { Position = UDim2.new(home.X.Scale, home.X.Offset - 8, home.Y.Scale, home.Y.Offset) })
+			task.delay(0.1, function()
+			if win._switchTok ~= stok then return end
 			if not fromBack and win._currentTab and win._currentTab ~= target then
 				table.insert(win._history, { tab = win._currentTab, page = win._currentPage })
 			end
@@ -1664,10 +1715,10 @@ function SableLib:CreateWindow(opts)
 				if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
 			end
 			positionIndicator(win)
-			local cp = card.Position
-			card.Position = UDim2.new(cp.X.Scale, cp.X.Offset + 8, cp.Y.Scale, cp.Y.Offset)
-			tw(card, 0.2, { Position = UDim2.new(cp.X.Scale, cp.X.Offset, cp.Y.Scale, cp.Y.Offset) })
+			card.Position = UDim2.new(home.X.Scale, home.X.Offset + 8, home.Y.Scale, home.Y.Offset)
+			tw(card, 0.18, { Position = UDim2.new(home.X.Scale, home.X.Offset, home.Y.Scale, home.Y.Offset) })
 			animateCards(win)
+			end)
 		end
 		Tab._select = function(fb, pg) selectTab(Tab, fb, pg) end
 
@@ -1693,6 +1744,13 @@ function SableLib:CreateWindow(opts)
 
 			local function selectPage(fromBack)
 				closeAllPopups(win)
+				win._switchTok = (win._switchTok or 0) + 1
+				local stok = win._switchTok
+				local home = win._cardHome or card.Position
+				fadeRowsOut(win)
+				tw(card, 0.09, { Position = UDim2.new(home.X.Scale, home.X.Offset - 8, home.Y.Scale, home.Y.Offset) })
+				task.delay(0.1, function()
+				if win._switchTok ~= stok then return end
 				if not fromBack and win._currentPage and win._currentPage ~= Page then
 					table.insert(win._history, { tab = win._currentTab, page = win._currentPage })
 				end
@@ -1711,10 +1769,10 @@ function SableLib:CreateWindow(opts)
 					if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
 				end
 				positionIndicator(win)
-				local cp2 = card.Position
-				card.Position = UDim2.new(cp2.X.Scale, cp2.X.Offset + 8, cp2.Y.Scale, cp2.Y.Offset)
-				tw(card, 0.2, { Position = UDim2.new(cp2.X.Scale, cp2.X.Offset, cp2.Y.Scale, cp2.Y.Offset) })
+				card.Position = UDim2.new(home.X.Scale, home.X.Offset + 8, home.Y.Scale, home.Y.Offset)
+				tw(card, 0.18, { Position = UDim2.new(home.X.Scale, home.X.Offset, home.Y.Scale, home.Y.Offset) })
 				animateCards(win)
+				end)
 			end
 
 			local labelRow = create("TextButton", {
@@ -1756,21 +1814,18 @@ function SableLib:CreateWindow(opts)
 					corner(row, 12)
 					stroke(row, COLORS.RowStroke, 1, 0.3)
 					padding(row, 16, 10, 16, 10)
-					local rowScale = ensureScale(row)
 					row.MouseEnter:Connect(function()
 						local c = COLORS.RowBG
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = Color3.new(math.min(c.R + 0.035, 1), math.min(c.G + 0.035, 1), math.min(c.B + 0.035, 1)) }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.1 }):Play() end
 						glowStroke(row, COLORS.RowStroke).Transparency = 0.55
-						tw(rowScale, Motion.HoverDuration, { Scale = 1.01 })
 					end)
 					row.MouseLeave:Connect(function()
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = COLORS.RowBG }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.3 }):Play() end
 						glowStroke(row).Transparency = 1
-						tw(rowScale, Motion.HoverDuration, { Scale = 1 })
 					end)
 				else
 					padding(row, 22, 14, 22, 14)
@@ -1833,20 +1888,20 @@ function SableLib:CreateWindow(opts)
 				local ON_X = 24
 				local function update()
 					if isBox then
-						TweenService:Create(boxBtn, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark }):Play()
+						tw(boxBtn, 0.15, { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark })
 						glowStroke(boxBtn).Transparency = state and 0.7 or 1
 						checkMark.Visible = state
 						if state then
 							checkMark.Size = UDim2.fromOffset(0, 0)
-							TweenService:Create(checkMark, TweenInfo.new(0.22, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = UDim2.fromOffset(16, 16) }):Play()
+							tw(checkMark, 0.15, { Size = UDim2.fromOffset(16, 16) })
 						end
 					else
-					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
+					tw(track, 0.18, { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff })
 					glowStroke(track).Transparency = state and 0.7 or 1
-					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
+					tw(knob, 0.18, {
 						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
 						BackgroundColor3 = COLORS.Knob,
-					}):Play()
+					})
 					end
 				end
 				if isBox then
@@ -1895,7 +1950,6 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(knob, 10)
 				glossBg(knob)
-				create("UIScale", { Parent = knob, Scale = 1 })
 				end
 
 				if isBox then
@@ -1911,14 +1965,12 @@ function SableLib:CreateWindow(opts)
 				local moved = false
 				local startX = 0
 				local startKnobX = OFF_X
-				local knobScale = knob:FindFirstChildOfClass("UIScale")
 				track.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						dragging = true
 						moved = false
 						startX = input.Position.X
 						startKnobX = state and ON_X or OFF_X
-						TweenService:Create(knobScale, TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1.3 }):Play()
 					end
 				end)
 				UserInputService.InputChanged:Connect(function(input)
@@ -1933,7 +1985,6 @@ function SableLib:CreateWindow(opts)
 					if not dragging then return end
 					if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
 					dragging = false
-					TweenService:Create(knobScale, TweenInfo.new(0.2, Enum.EasingStyle.Quint, Enum.EasingDirection.Out), { Scale = 1 }):Play()
 					if moved then
 						local curX = knob.Position.X.Offset
 						local newState = (curX + 10 > 14)
@@ -2083,6 +2134,7 @@ function SableLib:CreateWindow(opts)
 						local lf = listFrame
 						listFrame = nil
 						tw(lf, Motion.CloseDuration, { BackgroundTransparency = 1 })
+						tw(ensureScale(lf), Motion.CloseDuration, { Scale = 0.98 })
 						for _, d in ipairs(lf:GetDescendants()) do
 							if d:IsA("TextLabel") or d:IsA("TextButton") then
 								tw(d, Motion.CloseDuration, { BackgroundTransparency = 1, TextTransparency = 1 })
@@ -2552,13 +2604,16 @@ function SableLib:CreateWindow(opts)
 				stroke(box, COLORS.RowStroke, 1, 0.2)
 				glossBg(box)
 				padding(box, 10, 0, 10, 0)
+				local inputBorder = box:FindFirstChildOfClass("UIStroke")
 				box.Focused:Connect(function()
 					tw(box, Motion.HoverDuration, { BackgroundColor3 = COLORS.RowBG })
 					glowStroke(box).Transparency = 0.6
+					if inputBorder then tw(inputBorder, 0.12, { Transparency = 0.1 }) end
 				end)
 				box.FocusLost:Connect(function(enter)
 					tw(box, Motion.HoverDuration, { BackgroundColor3 = COLORS.Dark })
 					glowStroke(box).Transparency = 1
+					if inputBorder then tw(inputBorder, 0.12, { Transparency = 0.2 }) end
 					if enter and iOpts.Callback then
 						pcall(iOpts.Callback, box.Text)
 					end
@@ -2645,7 +2700,7 @@ function SableLib:CreateWindow(opts)
 						end
 						if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
 							listening = false
-							glowStroke(btn).Transparency = 1
+							tw(glowStroke(btn), 0.12, { Transparency = 1 })
 							applyKey(input.KeyCode, true)
 						end
 					elseif not gpe and input.KeyCode == current then
@@ -2731,7 +2786,12 @@ function SableLib:CreateWindow(opts)
 							task.delay(0.1, function() pcall(function() pf:Destroy() end) end)
 						end
 					end
-					if backdrop then backdrop:Destroy() backdrop = nil end
+					if backdrop then
+						local bd = backdrop
+						backdrop = nil
+						tw(bd, 0.1, { BackgroundTransparency = 1 })
+						task.delay(0.1, function() pcall(function() bd:Destroy() end) end)
+					end
 				end
 				table.insert(win._popups, closePop)
 
@@ -3188,8 +3248,8 @@ function SableLib:CreateWindow(opts)
 	end)
 	-- Window-Open: Scale + Slide + Shadow-Fade
 	local openScale = ensureScale(container)
-	openScale.Scale = 0.96
-	container.Position = UDim2.new(0.5, 0, 0.5, 10)
+	openScale.Scale = 0.97
+	container.Position = UDim2.new(0.5, 0, 0.5, 6)
 	shadow.BackgroundTransparency = 1
 	tw(openScale, Motion.OpenDuration, { Scale = 1 })
 	tw(container, Motion.OpenDuration, { Position = UDim2.new(0.5, 0, 0.5, 0) })
