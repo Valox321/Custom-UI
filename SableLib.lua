@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.22"
+SableLib.Version = "1.23"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -497,6 +497,24 @@ function SableLib:GetIcon(name)
 	local img = self:ResolveIcon(name)
 	return img
 end
+-- Titel-Look wie Referenz: Serifen-Font, erstes Wort weiss, Rest kursiv/lavendel
+-- Bodoni ist die Playfair-naechste eingebaute Roblox-Font; Fallback GothamBold
+local TitleFont = Enum.Font.GothamBold
+pcall(function() TitleFont = Enum.Font.Bodoni end)
+local function fancyTitle(label, text)
+	text = tostring(text or "")
+	local esc = text:gsub("&", "&amp;"):gsub("<", "&lt;"):gsub(">", "&gt;")
+	local first, rest = string.match(esc, "^(%S+)%s*(.-)%s*$")
+	label.Font = TitleFont
+	if rest and rest ~= "" then
+		label.RichText = true
+		label.Text = first .. ' <i><font color="rgb(190,185,235)">' .. rest .. "</font></i>"
+	else
+		label.RichText = false
+		label.Text = esc
+	end
+end
+
 local function isLucideName(s)
 	if type(s) ~= "string" then return false end
 	if s == "" then return false end
@@ -684,18 +702,19 @@ function SableLib:CreateWindow(opts)
 		Image = SableLib:ResolveIcon(opts.Icon or "crown") or "",
 		ImageColor3 = logoIsCustom and Color3.fromRGB(255, 255, 255) or COLORS.Beige,
 	})
-	create("TextLabel", {
+	local logoName = create("TextLabel", {
 		Parent = logoRow,
 		Position = UDim2.new(0, 32, 0, 2),
 		Size = UDim2.new(1, -32, 0, 24),
 		BackgroundTransparency = 1,
 		Text = winName,
-		Font = Enum.Font.GothamBold,
+		Font = TitleFont,
 		TextSize = 17,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
+	fancyTitle(logoName, winName)
 	create("TextLabel", {
 		Parent = logoRow,
 		Position = UDim2.new(0, 32, 0, 26),
@@ -745,12 +764,13 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, -320, 0, 32),
 		BackgroundTransparency = 1,
 		Text = winName,
-		Font = Enum.Font.GothamBold,
+		Font = TitleFont,
 		TextSize = 24,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
 	})
+	fancyTitle(headerTitle, winName)
 	local headerSub = create("TextLabel", {
 		Parent = header,
 		Position = UDim2.new(0, 0, 0, 32),
@@ -997,7 +1017,7 @@ function SableLib:CreateWindow(opts)
 	local function refreshHeader(win)
 		local tab = win._currentTab
 		if not tab then return end
-		win._headerTitle.Text = tab.Title or tab.Name
+		fancyTitle(win._headerTitle, tab.Title or tab.Name)
 		local total = tab.Count or 0
 		if total == 0 then
 			for _, p in ipairs(tab.Pages) do total = total + #p.Rows end
