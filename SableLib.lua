@@ -396,14 +396,16 @@ function SableLib:CreateWindow(opts)
 	end
 
 	-- Bottom-Tabs wie im Bild: inaktiv nur Icon (40 breit), aktiv Icon+Name (expandiert mit Animation)
-	local function animateBottomTab(btn, expand, instant)
-		local target = UDim2.fromOffset(expand and (btn._activeW or 86) or 40, 40)
+	-- entry ist die Tab-Tabelle (keine Custom-Props auf Instances möglich)
+	local function animateBottomTab(entry, expand, instant)
+		local btn = entry.Button
+		local target = UDim2.fromOffset(expand and (entry._activeW or 86) or 40, 40)
 		if instant then
 			btn.Size = target
 		else
 			TweenService:Create(btn, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
 		end
-		local nl = btn._nameLabel
+		local nl = entry._nameLabel
 		if nl then
 			if expand then
 				nl.Visible = true
@@ -584,11 +586,10 @@ function SableLib:CreateWindow(opts)
 				LayoutOrder = 2,
 			})
 		end
-		pill._nameLabel = nameLabel
-		pill._activeW = activeW
-		stylePill(pill, isActive)
-
 		local Tab = { Name = tabName, Button = pill, Pages = {}, ParentWindow = self }
+		Tab._nameLabel = nameLabel
+		Tab._activeW = activeW
+		stylePill(pill, isActive)
 
 		local function selectTab(target)
 			local win = target.ParentWindow
@@ -597,7 +598,7 @@ function SableLib:CreateWindow(opts)
 			for _, t in ipairs(win._tabs) do
 				local on = (t == target)
 				stylePill(t.Button, on)
-				animateBottomTab(t.Button, on, false)
+				animateBottomTab(t, on, false)
 			end
 			-- nur Top-Pills von diesem Tab zeigen
 			for _, p in ipairs(win._pages) do
@@ -666,7 +667,7 @@ function SableLib:CreateWindow(opts)
 				for _, t in ipairs(win._tabs) do
 					local on = (t == self)
 					stylePill(t.Button, on)
-					animateBottomTab(t.Button, on, false)
+					animateBottomTab(t, on, false)
 				end
 				for _, p in ipairs(win._pages) do
 					p.TopButton.Visible = (p.ParentTab == self)
