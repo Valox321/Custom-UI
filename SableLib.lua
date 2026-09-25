@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.45"
+SableLib.Version = "1.46"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -3250,7 +3250,6 @@ function SableLib:CreateWindow(opts)
 							hexBox.Text = toHex(cur)
 						end
 					end)
-				end)
 					local function bindNum(box, fn)
 						box.FocusLost:Connect(function(enter)
 						if not enter or syncing then return end
@@ -3281,6 +3280,7 @@ function SableLib:CreateWindow(opts)
 						if cOpts.Callback then pcall(cOpts.Callback, col, alpha) end
 						closePop()
 					end)
+				end)
 				local api = {}
 				function api:Set(c) col = c preview.BackgroundColor3 = c end
 				function api:Get() return col end
