@@ -13,6 +13,7 @@ local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
+local TextService = game:GetService("TextService")
 
 --// Lucide support via Footagesus/Icons (lucide default)
 --// GetIcon gibt Tabelle {imageUrl, iconData} zurück, kein String!
@@ -254,7 +255,7 @@ function SableLib:CreateWindow(opts)
 		Padding = UDim.new(0, 0),
 	})
 
-	-- BOTTOM NAV (logo links fix, tabs rechts scrollbar für viele Feature-Tabs)
+	-- BOTTOM NAV: ein Hintergrund-Balken wie im Bild, Tabs darin scrollbar
 	local bottomBar = create("Frame", {
 		Name = "BottomBar",
 		Parent = main,
@@ -263,10 +264,20 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, 0, 0, 50),
 		BackgroundTransparency = 1,
 	})
+	local navBg = create("Frame", {
+		Name = "NavBg",
+		Parent = bottomBar,
+		Position = UDim2.new(0, 0, 0, 0),
+		Size = UDim2.new(1, 0, 0, 50),
+		BackgroundColor3 = Color3.fromRGB(17, 19, 26),
+		BorderSizePixel = 0,
+	})
+	corner(navBg, 20)
+	stroke(navBg, COLORS.RowStroke, 1, 0.35)
 	local logo = create("TextLabel", {
 		Parent = bottomBar,
 		Size = UDim2.fromOffset(70, 40),
-		Position = UDim2.new(0, 0, 0, 5),
+		Position = UDim2.new(0, 14, 0, 5),
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = Enum.Font.GothamBold,
@@ -277,8 +288,8 @@ function SableLib:CreateWindow(opts)
 	local navScroll = create("ScrollingFrame", {
 		Name = "NavScroll",
 		Parent = bottomBar,
-		Position = UDim2.new(0, 78, 0, 5),
-		Size = UDim2.new(1, -78, 0, 40),
+		Position = UDim2.new(0, 92, 0, 5),
+		Size = UDim2.new(1, -104, 0, 40),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 0,
@@ -384,6 +395,38 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 
+	-- Bottom-Tabs wie im Bild: inaktiv nur Icon (40 breit), aktiv Icon+Name (expandiert mit Animation)
+	local function animateBottomTab(btn, expand, instant)
+		local target = UDim2.fromOffset(expand and (btn._activeW or 86) or 40, 40)
+		if instant then
+			btn.Size = target
+		else
+			TweenService:Create(btn, TweenInfo.new(0.32, Enum.EasingStyle.Back, Enum.EasingDirection.Out), { Size = target }):Play()
+		end
+		local nl = btn._nameLabel
+		if nl then
+			if expand then
+				nl.Visible = true
+				if instant then
+					nl.TextTransparency = 0
+				else
+					TweenService:Create(nl, TweenInfo.new(0.22), { TextTransparency = 0 }):Play()
+				end
+			else
+				if instant then
+					nl.TextTransparency = 1
+					nl.Visible = false
+				else
+					local tw = TweenService:Create(nl, TweenInfo.new(0.15), { TextTransparency = 1 })
+					tw.Completed:Connect(function()
+						if nl.TextTransparency >= 1 then nl.Visible = false end
+					end)
+					tw:Play()
+				end
+			end
+		end
+	end
+
 	local function buildPillContent(btn, iconName, text, iconOnly)
 		btn.Text = ""
 		create("UIListLayout", {
@@ -460,12 +503,21 @@ function SableLib:CreateWindow(opts)
 		local icon = tabOpts.Icon or "house"
 
 		local isActive = (#self._tabs == 0)
-		local iconOnly = (tabName == "" or tabOpts.IconOnly == true)
+		local neverName = (tabName == "" or tabOpts.IconOnly == true)
+
+		-- Zielbreite für aktiven Zustand aus Textbreite berechnen
+		local activeW = 40
+		if not neverName then
+			local tw = #tabName * 7
+			pcall(function()
+				tw = TextService:GetTextSize(tabName, 13, Enum.Font.GothamBold, Vector2.new(1000, 20)).X
+			end)
+			activeW = math.clamp(math.ceil(54 + tw), 74, 160)
+		end
 
 		local pill = create("TextButton", {
 			Parent = navScroll,
-			Size = iconOnly and UDim2.fromOffset(40, 40) or UDim2.fromOffset(86, 40),
-			AutomaticSize = iconOnly and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
+			Size = UDim2.fromOffset(isActive and activeW or 40, 40),
 			BackgroundColor3 = isActive and COLORS.PillActive or COLORS.PillBG,
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
@@ -473,9 +525,67 @@ function SableLib:CreateWindow(opts)
 			ClipsDescendants = true,
 			LayoutOrder = #self._tabs + 1,
 		})
-		corner(pill, iconOnly and 13 or 20)
+		corner(pill, 13)
 		stroke(pill, COLORS.RowStroke, 1, 0.3)
-		buildPillContent(pill, icon, tabName, iconOnly)
+		create("UIListLayout", {
+			Parent = pill,
+			FillDirection = Enum.FillDirection.Horizontal,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 7),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		})
+		padding(pill, 12, 0, 12, 0)
+		-- Icon (lucide oder Text-Fallback)
+		do
+			local img, rs, ro = nil, nil, nil
+			if isLucideName(icon) or string.find(icon, "rbxassetid", 1, true) then
+				img, rs, ro = SableLib:ResolveIcon(icon)
+			end
+			if img then
+				local il = create("ImageLabel", {
+					Parent = pill,
+					Size = UDim2.fromOffset(16, 16),
+					BackgroundTransparency = 1,
+					Image = img,
+					ImageColor3 = COLORS.Sub,
+					LayoutOrder = 1,
+				})
+				if rs and rs.X > 0 then
+					il.ImageRectSize = rs
+					il.ImageRectOffset = ro or Vector2.new(0, 0)
+				end
+			elseif icon ~= "" then
+				create("TextLabel", {
+					Parent = pill,
+					Size = UDim2.fromOffset(18, 18),
+					BackgroundTransparency = 1,
+					Text = icon,
+					Font = Enum.Font.GothamBold,
+					TextSize = 14,
+					TextColor3 = COLORS.Sub,
+					LayoutOrder = 1,
+				})
+			end
+		end
+		local nameLabel = nil
+		if not neverName then
+			nameLabel = create("TextLabel", {
+				Parent = pill,
+				Size = UDim2.fromOffset(0, 18),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				Text = tabName,
+				Font = Enum.Font.GothamBold,
+				TextSize = 13,
+				TextColor3 = COLORS.Sub,
+				TextTransparency = isActive and 0 or 1,
+				Visible = isActive,
+				LayoutOrder = 2,
+			})
+		end
+		pill._nameLabel = nameLabel
+		pill._activeW = activeW
 		stylePill(pill, isActive)
 
 		local Tab = { Name = tabName, Button = pill, Pages = {}, ParentWindow = self }
@@ -485,7 +595,9 @@ function SableLib:CreateWindow(opts)
 			closeAllPopups(win)
 			win._currentTab = target
 			for _, t in ipairs(win._tabs) do
-				stylePill(t.Button, t == target)
+				local on = (t == target)
+				stylePill(t.Button, on)
+				animateBottomTab(t.Button, on, false)
 			end
 			-- nur Top-Pills von diesem Tab zeigen
 			for _, p in ipairs(win._pages) do
@@ -552,7 +664,9 @@ function SableLib:CreateWindow(opts)
 				win._currentTab = self
 				win._currentPage = Page
 				for _, t in ipairs(win._tabs) do
-					stylePill(t.Button, t == self)
+					local on = (t == self)
+					stylePill(t.Button, on)
+					animateBottomTab(t.Button, on, false)
 				end
 				for _, p in ipairs(win._pages) do
 					p.TopButton.Visible = (p.ParentTab == self)
