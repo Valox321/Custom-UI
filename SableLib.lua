@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.5-bild-look"
+SableLib.Version = "1.6-tabfix"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
