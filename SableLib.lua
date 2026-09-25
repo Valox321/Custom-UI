@@ -13,6 +13,80 @@ local TweenService = game:GetService("TweenService")
 local UserInputService = game:GetService("UserInputService")
 local CoreGui = game:GetService("CoreGui")
 
+--// Lucide support via Footagesus/Icons (lucide default)
+--// GetIcon gibt Tabelle {imageUrl, iconData} zurück, kein String!
+local IconsModule = nil
+pcall(function()
+	local src = game:HttpGet("https://raw.githubusercontent.com/Footagesus/Icons/main/Main-v2.lua")
+	IconsModule = loadstring(src)()
+	if IconsModule and IconsModule.SetIconsType then
+		pcall(function() IconsModule.SetIconsType("lucide") end)
+	end
+end)
+
+-- gibt image, rectSize, rectOffset zurück (oder nil)
+function SableLib:ResolveIcon(name)
+	if not name or name == "" then return nil end
+	if string.find(name, "rbxassetid", 1, true) then
+		return name, Vector2.new(0, 0), Vector2.new(0, 0)
+	end
+	if IconsModule then
+		-- 1) GetIcon (kann string ODER {url, data} sein)
+		local ok, res = pcall(function()
+			if IconsModule.GetIcon then
+				return IconsModule.GetIcon(name)
+			end
+			return nil
+		end)
+		if ok and res then
+			if type(res) == "string" and res ~= "" then
+				return res, Vector2.new(0, 0), Vector2.new(0, 0)
+			elseif type(res) == "table" and res[1] then
+				local url = res[1]
+				local data = res[2]
+				if type(url) == "string" and url ~= "" then
+					if type(data) == "table" then
+						return url, data.ImageRectSize or Vector2.new(0, 0), data.ImageRectPosition or Vector2.new(0, 0)
+					end
+					return url, Vector2.new(0, 0), Vector2.new(0, 0)
+				end
+			end
+		end
+		-- 2) Fallback über Icon2 (gibt immer {url, data})
+		local ok2, res2 = pcall(function()
+			if IconsModule.Icon2 then
+				return IconsModule.Icon2(name)
+			end
+			return nil
+		end)
+		if ok2 and type(res2) == "table" and res2[1] then
+			local url = res2[1]
+			local data = res2[2]
+			if type(url) == "string" then
+				if type(data) == "table" then
+					return url, data.ImageRectSize or Vector2.new(0, 0), data.ImageRectPosition or Vector2.new(0, 0)
+				end
+				return url, Vector2.new(0, 0), Vector2.new(0, 0)
+			end
+		end
+	end
+	return nil
+end
+
+function SableLib:GetIcon(name)
+	local img = self:ResolveIcon(name)
+	return img
+end
+
+local function isLucideName(s)
+	if type(s) ~= "string" then return false end
+	if s == "" then return false end
+	if string.find(s, "rbxassetid", 1, true) then return false end
+	-- lucide-namen sind lowercase mit bindestrich, keine leerzeichen/emojis
+	if string.match(s, "^[a-z0-9%-]+$") then return true end
+	return false
+end
+
 local function create(className, props, children)
 	local inst = Instance.new(className)
 	for k, v in pairs(props or {}) do
@@ -233,39 +307,109 @@ function SableLib:CreateWindow(opts)
 
 	local function stylePill(btn, active)
 		btn.BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG
-		btn.TextColor3 = active and COLORS.Text or COLORS.Sub
+		pcall(function() btn.TextColor3 = active and COLORS.Text or COLORS.Sub end)
+		for _, ch in ipairs(btn:GetDescendants()) do
+			if ch:IsA("TextLabel") then
+				ch.TextColor3 = active and COLORS.Text or COLORS.Sub
+			elseif ch:IsA("ImageLabel") then
+				ch.ImageColor3 = active and COLORS.Text or COLORS.Sub
+			end
+		end
+	end
+
+	local function buildPillContent(btn, iconName, text, iconOnly)
+		btn.Text = ""
+		create("UIListLayout", {
+			Parent = btn,
+			FillDirection = Enum.FillDirection.Horizontal,
+			SortOrder = Enum.SortOrder.LayoutOrder,
+			Padding = UDim.new(0, 6),
+			VerticalAlignment = Enum.VerticalAlignment.Center,
+			HorizontalAlignment = Enum.HorizontalAlignment.Center,
+		})
+		padding(btn, 10, 0, 10, 0)
+
+		local hasIcon = iconName and iconName ~= ""
+		if hasIcon then
+			local img, rectSize, rectOffset = nil, nil, nil
+			if isLucideName(iconName) or string.find(iconName, "rbxassetid", 1, true) then
+				img, rectSize, rectOffset = SableLib:ResolveIcon(iconName)
+			end
+			if img then
+				local imgLabel = create("ImageLabel", {
+					Parent = btn,
+					Size = UDim2.fromOffset(16, 16),
+					BackgroundTransparency = 1,
+					Image = img,
+					ImageColor3 = COLORS.Sub,
+					LayoutOrder = 1,
+				})
+				-- Spritesheet-Icons brauchen Rect (Footagesus/Icons nutzt Spritesheets)
+				if rectSize and rectSize.X > 0 and rectSize.Y > 0 then
+					imgLabel.ImageRectSize = rectSize
+					imgLabel.ImageRectOffset = rectOffset or Vector2.new(0, 0)
+				end
+			else
+				-- fallback: emoji / text-symbol (z.B. "+", "↗")
+				-- wenn lucide-name nicht gefunden wurde, nichts als Text anzeigen (kein "trending-up" text)
+				if not isLucideName(iconName) then
+					create("TextLabel", {
+						Parent = btn,
+						Size = UDim2.fromOffset(18, 18),
+						BackgroundTransparency = 1,
+						Text = iconName,
+						Font = Enum.Font.GothamBold,
+						TextSize = 14,
+						TextColor3 = COLORS.Sub,
+						LayoutOrder = 1,
+					})
+				else
+					warn("[sable] lucide icon nicht gefunden: " .. tostring(iconName))
+				end
+			end
+		end
+
+		if not iconOnly then
+			create("TextLabel", {
+				Parent = btn,
+				Size = UDim2.fromOffset(0, 18),
+				AutomaticSize = Enum.AutomaticSize.X,
+				BackgroundTransparency = 1,
+				Text = text or "",
+				Font = Enum.Font.GothamBold,
+				TextSize = 13,
+				TextColor3 = COLORS.Sub,
+				LayoutOrder = 2,
+			})
+		end
 	end
 
 	-- creates a top pill page holder in advance, actual rows live in one shared scroll
 	-- we switch visibility per page by storing row frames
+	-- Icon kann sein: "crown" / "swords" / "skull" (lucide-name) ODER "rbxassetid://..." ODER emoji-text
 	function Window:CreateTab(tabOpts)
 		tabOpts = tabOpts or {}
 		local tabName = tabOpts.Name or "Main"
-		local icon = tabOpts.Icon or "+"
+		local icon = tabOpts.Icon or "house"
 
 		local isActive = (#self._tabs == 0)
+		local iconOnly = (tabName == "" or tabOpts.IconOnly == true)
 
 		local pill = create("TextButton", {
 			Parent = bottomBar,
-			Size = UDim2.fromOffset(68, 40),
+			Size = iconOnly and UDim2.fromOffset(40, 40) or UDim2.fromOffset(86, 40),
+			AutomaticSize = iconOnly and Enum.AutomaticSize.None or Enum.AutomaticSize.X,
 			BackgroundColor3 = isActive and COLORS.PillActive or COLORS.PillBG,
 			BorderSizePixel = 0,
 			AutoButtonColor = false,
-			Font = Enum.Font.GothamBold,
-			TextSize = 13,
-			Text = "  " .. icon .. "   " .. tabName,
-			TextColor3 = isActive and COLORS.Text or COLORS.Sub,
+			Text = "",
+			ClipsDescendants = true,
 			LayoutOrder = #self._tabs + 1,
 		})
 		corner(pill, 20)
 		stroke(pill, COLORS.RowStroke, 1, 0.3)
-
-		-- icon-only tabs (like screenshot: crosshair, diamond, user...) can be created with Name = "" 
-		if tabName == "" or tabOpts.IconOnly then
-			pill.Size = UDim2.fromOffset(44, 40)
-			pill.Text = icon
-			pill.TextSize = 17
-		end
+		buildPillContent(pill, icon, tabName, iconOnly)
+		stylePill(pill, isActive)
 
 		local Tab = { Name = tabName, Button = pill, Pages = {}, ParentWindow = self }
 
@@ -284,15 +428,13 @@ function SableLib:CreateWindow(opts)
 				BackgroundColor3 = isFirstPage and COLORS.PillActive or COLORS.PillBG,
 				BorderSizePixel = 0,
 				AutoButtonColor = false,
-				Font = Enum.Font.GothamBold,
-				TextSize = 13,
-				Text = "  " .. pageIcon .. "  " .. pageName .. "  ",
-				TextColor3 = isFirstPage and COLORS.Text or COLORS.Sub,
+				Text = "",
 				LayoutOrder = #win._pages + 1,
 			})
 			corner(topPill, 16)
 			stroke(topPill, COLORS.RowStroke, 1, 0.3)
-			padding(topPill, 10, 0, 10, 0)
+			buildPillContent(topPill, pageIcon, pageName, false)
+			stylePill(topPill, isFirstPage)
 
 			local Page = {
 				Name = pageName,
