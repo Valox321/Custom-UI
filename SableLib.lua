@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.34"
+SableLib.Version = "1.35"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -868,6 +868,7 @@ function SableLib:CreateWindow(opts)
 	fancyTitle(headerTitle, winName)
 	local headerSub = create("TextLabel", {
 		Parent = header,
+		Position = UDim2.new(0, 0, 0, 30),
 		Size = UDim2.new(1, -260, 0, 14),
 		BackgroundTransparency = 1,
 		Text = "",
@@ -886,6 +887,7 @@ function SableLib:CreateWindow(opts)
 	})
 	corner(searchFrame, 10)
 	stroke(searchFrame, COLORS.RowStroke, 1, 0.3)
+	glowStroke(searchFrame).Transparency = 0.85
 	create("ImageLabel", {
 		Parent = searchFrame,
 		AnchorPoint = Vector2.new(0, 0.5),
@@ -977,6 +979,7 @@ function SableLib:CreateWindow(opts)
 			AutoButtonColor = false,
 		})
 		corner(b, 8)
+		stroke(b, COLORS.RowStroke, 1, 0.5)
 		local il = create("ImageLabel", {
 			Parent = b,
 			AnchorPoint = Vector2.new(0.5, 0.5),
@@ -1173,12 +1176,28 @@ function SableLib:CreateWindow(opts)
 		end
 	end)
 
+	-- UI-Glow (nur UI, kein Blur): legt einen weichen Violett-Schein um ein Element
+	local function glowStroke(parent, color)
+		local g = parent:FindFirstChild("SableGlow")
+		if not g then
+			g = Instance.new("UIStroke")
+			g.Name = "SableGlow"
+			g.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+			g.Thickness = 2
+			g.Transparency = 1
+			g.Parent = parent
+		end
+		g.Color = color or COLORS.Beige
+		return g
+	end
+
 	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
 	local function sideStyle(btn, active)
 		TweenService:Create(btn, TweenInfo.new(0.18), {
 			BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG,
 			BackgroundTransparency = active and 0.15 or 1,
 		}):Play()
+		glowStroke(btn).Transparency = active and 0.7 or 1
 		for _, ch in ipairs(btn:GetDescendants()) do
 			if ch:IsA("TextLabel") then
 				ch.TextColor3 = active and COLORS.Text or COLORS.Sub
@@ -1257,10 +1276,12 @@ function SableLib:CreateWindow(opts)
 	end
 	local function styleViewBtns(win)
 		local grid = win._view == "grid"
-		win._listBtn.BackgroundTransparency = grid and 1 or 0.15
-		win._gridBtn.BackgroundTransparency = grid and 0.15 or 1
+		win._listBtn.BackgroundTransparency = grid and 0 or 0.15
+		win._gridBtn.BackgroundTransparency = grid and 0.15 or 0
 		win._listIco.ImageColor3 = grid and COLORS.Sub or COLORS.Text
 		win._gridIco.ImageColor3 = grid and COLORS.Text or COLORS.Sub
+		glowStroke(win._listBtn).Transparency = grid and 1 or 0.7
+		glowStroke(win._gridBtn).Transparency = grid and 0.7 or 1
 	end
 	local function applyView(win, animate)
 		local grid = win._view == "grid"
@@ -1513,11 +1534,13 @@ function SableLib:CreateWindow(opts)
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = Color3.new(math.min(c.R + 0.035, 1), math.min(c.G + 0.035, 1), math.min(c.B + 0.035, 1)) }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.1 }):Play() end
+						glowStroke(row, COLORS.RowStroke).Transparency = 0.55
 					end)
 					row.MouseLeave:Connect(function()
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = COLORS.RowBG }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.3 }):Play() end
+						glowStroke(row).Transparency = 1
 					end)
 				else
 					padding(row, 22, 14, 22, 14)
@@ -1581,6 +1604,7 @@ function SableLib:CreateWindow(opts)
 				local function update()
 					if isBox then
 						TweenService:Create(boxBtn, TweenInfo.new(0.18), { BackgroundColor3 = state and COLORS.Beige or COLORS.Dark }):Play()
+						glowStroke(boxBtn).Transparency = state and 0.7 or 1
 						checkMark.Visible = state
 						if state then
 							checkMark.Size = UDim2.fromOffset(0, 0)
@@ -1588,6 +1612,7 @@ function SableLib:CreateWindow(opts)
 						end
 					else
 					TweenService:Create(track, TweenInfo.new(0.2), { BackgroundColor3 = state and COLORS.Beige or COLORS.TrackOff }):Play()
+					glowStroke(track).Transparency = state and 0.7 or 1
 					TweenService:Create(knob, TweenInfo.new(0.3, Enum.EasingStyle.Back, Enum.EasingDirection.Out), {
 						Position = state and UDim2.new(1, -24, 0.5, 0) or UDim2.new(0, 4, 0.5, 0),
 						BackgroundColor3 = COLORS.Knob,
