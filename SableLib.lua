@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.37"
+SableLib.Version = "1.38"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1042,7 +1042,6 @@ function SableLib:CreateWindow(opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		CellPadding = UDim2.new(0, 8, 0, 8),
 		CellSize = UDim2.new(0.5, -4, 0, 110),
-		Enabled = false,
 	})
 	local emptyLabel = create("TextLabel", {
 		Parent = card,
@@ -1276,8 +1275,8 @@ function SableLib:CreateWindow(opts)
 	end
 	local function applyView(win, animate)
 		local grid = win._view == "grid"
-		win._listLayout.Enabled = not grid
-		win._gridLayout.Enabled = grid
+		win._gridLayout.Parent = grid and win._scroll or nil
+		win._listLayout.Parent = grid and nil or win._scroll
 		syncPages(win)
 		applyFilter(win)
 		styleViewBtns(win)
@@ -2893,7 +2892,7 @@ function SableLib:CreateWindow(opts)
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		applyFilter(Window)
 	end)
-	styleViewBtns(Window)
+	applyView(Window, false)
 	return Window
 end
 
