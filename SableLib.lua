@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.24"
+SableLib.Version = "1.25"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -705,11 +705,11 @@ function SableLib:CreateWindow(opts)
 	local logoName = create("TextLabel", {
 		Parent = logoRow,
 		Position = UDim2.new(0, 32, 0, 2),
-		Size = UDim2.new(1, -32, 0, 24),
+		Size = UDim2.new(1, -32, 0, 28),
 		BackgroundTransparency = 1,
 		Text = winName,
 		Font = TitleFont,
-		TextSize = 19,
+		TextSize = 22,
 		TextColor3 = COLORS.Text,
 		TextXAlignment = Enum.TextXAlignment.Left,
 		TextTruncate = Enum.TextTruncate.AtEnd,
@@ -717,7 +717,7 @@ function SableLib:CreateWindow(opts)
 	fancyTitle(logoName, winName)
 	create("TextLabel", {
 		Parent = logoRow,
-		Position = UDim2.new(0, 32, 0, 26),
+		Position = UDim2.new(0, 32, 0, 30),
 		Size = UDim2.new(1, -32, 0, 16),
 		BackgroundTransparency = 1,
 		Text = string.upper(winVersion),
