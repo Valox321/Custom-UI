@@ -7,6 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
+SableLib.Version = "1.4-menu-key"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1092,14 +1093,24 @@ function SableLib:CreateWindow(opts)
 					listening = true
 					btn.Text = "..."
 				end)
+				-- Executor-sicher: InputBegan feuert auch im Executor für Keyboard.
+				-- Beim Binden (listening) wird gpe ignoriert, damit jede Taste übernommen wird.
 				UserInputService.InputBegan:Connect(function(input, gpe)
-					if listening and input.UserInputType == Enum.UserInputType.Keyboard then
-						listening = false
-						current = input.KeyCode
-						btn.Text = keyName(current)
-						if kOpts.Callback then pcall(kOpts.Callback, current) end
-					elseif not listening and not gpe and input.KeyCode == current then
-						if kOpts.Callback then pcall(kOpts.Callback, current) end
+					if listening then
+						if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
+							listening = false
+							current = input.KeyCode
+							btn.Text = keyName(current)
+							if kOpts.Callback then
+								local ok, err = pcall(kOpts.Callback, current)
+								if not ok then warn("[sable] keybind callback error: " .. tostring(err)) end
+							end
+						end
+					elseif not gpe and input.KeyCode == current then
+						if kOpts.Callback then
+							local ok, err = pcall(kOpts.Callback, current)
+							if not ok then warn("[sable] keybind callback error: " .. tostring(err)) end
+						end
 					end
 				end)
 				local api = {}
