@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.28"
+SableLib.Version = "1.29"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -555,7 +555,56 @@ local COLORS = {
 	TrackOff   = Color3.fromRGB(33, 35, 66),
 	Knob       = Color3.fromRGB(255, 255, 255),
 	Dark       = Color3.fromRGB(16, 18, 42),
+	MainBG     = Color3.fromRGB(10, 12, 30),
 }
+
+local DEFAULT_COLORS = table.clone(COLORS)
+local THEMES = {
+	Midnight = {
+		MainBG = Color3.fromRGB(4, 5, 12),
+		ContentBG = Color3.fromRGB(6, 8, 18),
+		RowBG = Color3.fromRGB(13, 15, 30),
+		RowStroke = Color3.fromRGB(36, 40, 80),
+		PillBG = Color3.fromRGB(13, 15, 30),
+		PillActive = Color3.fromRGB(110, 92, 235),
+		Text = Color3.fromRGB(255, 255, 255),
+		Sub = Color3.fromRGB(135, 137, 160),
+		Beige = Color3.fromRGB(110, 92, 235),
+		BeigeText = Color3.fromRGB(255, 255, 255),
+		TrackOff = Color3.fromRGB(24, 26, 52),
+		Knob = Color3.fromRGB(255, 255, 255),
+		Dark = Color3.fromRGB(8, 10, 22),
+		MainBG = Color3.fromRGB(4, 5, 12),
+	},
+	Ember = {
+		MainBG = Color3.fromRGB(16, 10, 14),
+		ContentBG = Color3.fromRGB(22, 14, 20),
+		RowBG = Color3.fromRGB(32, 20, 28),
+		RowStroke = Color3.fromRGB(88, 48, 64),
+		PillBG = Color3.fromRGB(32, 20, 28),
+		PillActive = Color3.fromRGB(200, 70, 90),
+		Text = Color3.fromRGB(255, 255, 255),
+		Sub = Color3.fromRGB(168, 142, 150),
+		Beige = Color3.fromRGB(200, 70, 90),
+		BeigeText = Color3.fromRGB(255, 255, 255),
+		TrackOff = Color3.fromRGB(44, 28, 36),
+		Knob = Color3.fromRGB(255, 255, 255),
+		Dark = Color3.fromRGB(20, 12, 18),
+		MainBG = Color3.fromRGB(16, 10, 14),
+	},
+}
+THEMES.Default = table.clone(DEFAULT_COLORS)
+function SableLib:SetTheme(t)
+	if typeof(t) == "string" then
+		local p = THEMES[t]
+		if not p then warn("[sable] unknown theme: " .. tostring(t)) return end
+		t = p
+	end
+	assert(typeof(t) == "table", "SetTheme: Theme-Name oder Farbtabelle erwartet")
+	for k, v in pairs(t) do
+		if typeof(v) == "Color3" then COLORS[k] = v end
+	end
+end
 
 local function corner(parent, radius)
 	return create("UICorner", { CornerRadius = UDim.new(0, radius or 10), Parent = parent })
@@ -625,8 +674,23 @@ function SableLib:CreateWindow(opts)
 	local winName = opts.Name or "sable"
 	local toggleKey = opts.ToggleKey or Enum.KeyCode.RightShift
 	local winVersion = opts.Version or "BETA"
+	if opts.Theme then SableLib:SetTheme(opts.Theme) end
+	if opts.Accent and typeof(opts.Accent) == "Color3" then
+		COLORS.Beige = opts.Accent
+		COLORS.PillActive = opts.Accent
+		COLORS.BeigeText = Color3.fromRGB(255, 255, 255)
+	end
+	if opts.Background and typeof(opts.Background) == "Color3" then
+		COLORS.MainBG = opts.Background
+		COLORS.ContentBG = opts.Background
+	end
+	local winTransparency = math.clamp(tonumber(opts.Transparency) or 0, 0, 0.5)
 
 	-- cleanup old
+	pcall(function()
+		local old = game:GetService("Lighting"):FindFirstChild("SableBlur")
+		if old then old:Destroy() end
+	end)
 	pcall(function()
 		if CoreGui:FindFirstChild("SableUI") then
 			CoreGui.SableUI:Destroy()
@@ -647,13 +711,45 @@ function SableLib:CreateWindow(opts)
 		gui.Parent = Players.LocalPlayer:WaitForChild("PlayerGui")
 	end
 
+	-- Abgedunkelter Spiel-Hintergrund: UI steht klar im Vordergrund
+	local dim = create("Frame", {
+		Name = "Dim",
+		Parent = gui,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+		BackgroundTransparency = 0.45,
+		BorderSizePixel = 0,
+	})
+	-- Optionaler Blur auf die 3D-Welt (nur wenn noch keiner existiert)
+	local blurOn = opts.Blur ~= false
+	local blurFx, madeBlur = nil, false
+	local function setBlur(on)
+		if not blurOn then return end
+		pcall(function()
+			local lighting = game:GetService("Lighting")
+			if on then
+				if not lighting:FindFirstChild("SableBlur") and not lighting:FindFirstChildOfClass("BlurEffect") then
+					blurFx = Instance.new("BlurEffect")
+					blurFx.Name = "SableBlur"
+					blurFx.Size = 14
+					blurFx.Parent = lighting
+					madeBlur = true
+				end
+			else
+				if madeBlur and blurFx and blurFx.Parent then blurFx:Destroy() end
+				blurFx, madeBlur = nil, false
+			end
+		end)
+	end
+	setBlur(true)
 	local main = create("Frame", {
 		Name = "Main",
 		Parent = gui,
 		AnchorPoint = Vector2.new(0.5, 0.5),
 		Position = UDim2.new(0.5, 0, 0.5, 0),
 		Size = opts.Size or UDim2.fromOffset(1100, 700),
-		BackgroundColor3 = Color3.fromRGB(10, 12, 30),
+		BackgroundColor3 = COLORS.MainBG,
+		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
 	})
 	corner(main, 14)
@@ -680,6 +776,7 @@ function SableLib:CreateWindow(opts)
 		Parent = body,
 		Size = UDim2.new(0, 250, 1, 0),
 		BackgroundColor3 = COLORS.ContentBG,
+		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
 		LayoutOrder = 1,
 	})
@@ -845,12 +942,64 @@ function SableLib:CreateWindow(opts)
 		TextColor3 = COLORS.Sub,
 		TextXAlignment = Enum.TextXAlignment.Left,
 	})
+	local chipBtn = create("TextButton", {
+		Parent = header,
+		Position = UDim2.new(0, 92, 0, 58),
+		Size = UDim2.fromOffset(120, 26),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Text = "",
+		AutoButtonColor = false,
+	})
+	corner(chipBtn, 13)
+	stroke(chipBtn, COLORS.RowStroke, 1, 0.5)
+	local chipLbl = create("TextLabel", {
+		Parent = chipBtn,
+		Size = UDim2.new(1, 0, 1, 0),
+		BackgroundTransparency = 1,
+		Text = "",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 12,
+		TextColor3 = COLORS.Sub,
+	})
+	local viewBar = create("Frame", {
+		Parent = header,
+		AnchorPoint = Vector2.new(1, 0),
+		Position = UDim2.new(1, 0, 0, 58),
+		Size = UDim2.fromOffset(76, 26),
+		BackgroundTransparency = 1,
+	})
+	local function viewBtn(icon, x)
+		local b = create("TextButton", {
+			Parent = viewBar,
+			Position = UDim2.new(0, x, 0, 0),
+			Size = UDim2.fromOffset(34, 26),
+			BackgroundColor3 = COLORS.PillActive,
+			BackgroundTransparency = 1,
+			Text = "",
+			AutoButtonColor = false,
+		})
+		corner(b, 8)
+		local il = create("ImageLabel", {
+			Parent = b,
+			AnchorPoint = Vector2.new(0.5, 0.5),
+			Position = UDim2.new(0.5, 0, 0.5, 0),
+			Size = UDim2.fromOffset(15, 15),
+			BackgroundTransparency = 1,
+			Image = SableLib:ResolveIcon(icon) or "",
+			ImageColor3 = COLORS.Sub,
+		})
+		return b, il
+	end
+	local listBtn, listIco = viewBtn("list", 0)
+	local gridBtn, gridIco = viewBtn("layout-grid", 42)
 	local card = create("Frame", {
 		Name = "Card",
 		Parent = content,
 		Position = UDim2.new(0, 0, 0, 100),
 		Size = UDim2.new(1, 0, 1, -100),
 		BackgroundColor3 = COLORS.RowBG,
+		BackgroundTransparency = winTransparency,
 		BorderSizePixel = 0,
 	})
 	corner(card, 12)
@@ -861,17 +1010,37 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
-		ScrollBarThickness = 4,
+		ScrollBarThickness = 0,
 		ScrollBarImageColor3 = Color3.fromRGB(105, 107, 115),
 		AutomaticCanvasSize = Enum.AutomaticSize.Y,
 		CanvasSize = UDim2.new(0, 0, 0, 0),
 		ScrollingDirection = Enum.ScrollingDirection.Y,
 	})
 	padding(scroll, 0, 10, 0, 10)
-	create("UIListLayout", {
+	local listLayout = create("UIListLayout", {
 		Parent = scroll,
 		SortOrder = Enum.SortOrder.LayoutOrder,
-		Padding = UDim.new(0, 0),
+		Padding = UDim.new(0, 10),
+	})
+	local gridLayout = create("UIGridLayout", {
+		Parent = scroll,
+		SortOrder = Enum.SortOrder.LayoutOrder,
+		CellPadding = UDim2.new(0, 10, 0, 10),
+		CellSize = UDim2.new(0.5, -5, 0, 120),
+		Enabled = false,
+	})
+	local emptyLabel = create("TextLabel", {
+		Parent = card,
+		AnchorPoint = Vector2.new(0.5, 0),
+		Position = UDim2.new(0.5, 0, 0, 120),
+		Size = UDim2.new(1, -40, 0, 30),
+		BackgroundTransparency = 1,
+		Visible = false,
+		Text = "No modules found",
+		Font = Enum.Font.GothamMedium,
+		TextSize = 14,
+		TextColor3 = COLORS.Sub,
+		TextXAlignment = Enum.TextXAlignment.Center,
 	})
 
 	-- Ambienter Hintergrund-Glow wie Referenz (violett oben rechts, blau unten links)
@@ -928,6 +1097,20 @@ function SableLib:CreateWindow(opts)
 	Window._history = {}
 	Window._toggleRegs = {}
 	Window._logoIcon = logoIcon
+	Window._listLayout = listLayout
+	Window._gridLayout = gridLayout
+	Window._emptyLabel = emptyLabel
+	Window._view = "list"
+	Window._chipBtn = chipBtn
+	Window._chipLbl = chipLbl
+	Window._listBtn, Window._listIco = listBtn, listIco
+	Window._gridBtn, Window._gridIco = gridBtn, gridIco
+	chipBtn.MouseButton1Click:Connect(function()
+		Window._searchBox.Text = ""
+	end)
+	listBtn.MouseButton1Click:Connect(function() Window:SetView("list") end)
+	gridBtn.MouseButton1Click:Connect(function() Window:SetView("grid") end)
+	styleViewBtns(Window)
 	searchBox:GetPropertyChangedSignal("Text"):Connect(function()
 		applyFilter(Window)
 	end)
@@ -953,7 +1136,23 @@ function SableLib:CreateWindow(opts)
 	function Window:Toggle()
 		self._visible = not self._visible
 		gui.Enabled = self._visible
+		setBlur(self._visible)
 	end
+	function Window:SetChip(text)
+		if text and text ~= "" then
+			self._chipLbl.Text = tostring(text)
+			self._chipBtn.Visible = true
+		else
+			self._chipBtn.Visible = false
+		end
+	end
+	function Window:SetView(v)
+		v = (v == "grid") and "grid" or "list"
+		if self._view == v then return end
+		self._view = v
+		applyView(self, true)
+	end
+	function Window:GetView() return self._view end
 	-- Sidebar-Logo-Icon zur Laufzeit wechseln, z.B. Window:SetTopIcon("crown")
 	function Window:SetTopIcon(iconName)
 		local img = SableLib:ResolveIcon(iconName or "headphones")
@@ -976,13 +1175,16 @@ function SableLib:CreateWindow(opts)
 		if input.KeyCode == Window._toggleKey then
 			Window._visible = not Window._visible
 			gui.Enabled = Window._visible
+			setBlur(Window._visible)
 		end
 	end)
 
 	-- Sidebar-Button-Stil (Screenshot: aktiv = violett, inaktiv = transparent)
 	local function sideStyle(btn, active)
-		btn.BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG
-		btn.BackgroundTransparency = active and 0.15 or 1
+		TweenService:Create(btn, TweenInfo.new(0.18), {
+			BackgroundColor3 = active and COLORS.PillActive or COLORS.PillBG,
+			BackgroundTransparency = active and 0.15 or 1,
+		}):Play()
 		for _, ch in ipairs(btn:GetDescendants()) do
 			if ch:IsA("TextLabel") then
 				ch.TextColor3 = active and COLORS.Text or COLORS.Sub
@@ -992,19 +1194,24 @@ function SableLib:CreateWindow(opts)
 		end
 	end
 
-	-- Titel-Text einer Row finden (fuer Search-Filter)
-	local function rowTitle(row)
+	-- Suchtext einer Row: Titel + Beschreibung (fuer Search-Filter)
+	local function rowText(row)
+		local parts = {}
 		for _, d in ipairs(row:GetDescendants()) do
-			if d:IsA("TextLabel") and d.Font == Enum.Font.GothamBold and d.TextSize >= 15 then
-				return d.Text or ""
+			if d:IsA("TextLabel") and d.Text and d.Text ~= "" then
+				if (d.Font == Enum.Font.GothamBold and d.TextSize >= 15)
+					or (d.Font == Enum.Font.Gotham and (d.TextSize == 13 or d.TextSize == 14)) then
+					table.insert(parts, d.Text)
+				end
 			end
 		end
-		return ""
+		return table.concat(parts, " ")
 	end
 
 	-- Sichtbarkeit aller Rows neu berechnen (aktive Page + Search)
 	local function applyFilter(win)
 		local q = string.lower(win._searchBox.Text or "")
+		local shown = 0
 		for _, p in ipairs(win._pages) do
 			local active = (p == win._currentPage)
 			for _, r in ipairs(p.Rows) do
@@ -1012,10 +1219,15 @@ function SableLib:CreateWindow(opts)
 					r.Visible = false
 				elseif q == "" then
 					r.Visible = true
+					shown = shown + 1
 				else
-					r.Visible = string.find(string.lower(rowTitle(r)), q, 1, true) ~= nil
+					r.Visible = string.find(string.lower(rowText(r)), q, 1, true) ~= nil
+					if r.Visible then shown = shown + 1 end
 				end
 			end
+		end
+		if win._emptyLabel then
+			win._emptyLabel.Visible = (win._currentPage ~= nil) and (shown == 0)
 		end
 	end
 
@@ -1023,9 +1235,47 @@ function SableLib:CreateWindow(opts)
 	local function syncPages(win)
 		for _, p in ipairs(win._pages) do
 			if p.LabelRow then
-				p.LabelRow.Visible = (p.ParentTab == win._currentTab) and (#p.ParentTab.Pages > 1)
+				p.LabelRow.Visible = (p.ParentTab == win._currentTab) and (#p.ParentTab.Pages > 1) and (win._view ~= "grid")
 			end
 		end
+	end
+
+	-- Cards erscheinen sanft (fade, gestaffelt, max 14)
+	local function animateCards(win)
+		if not win._currentPage then return end
+		local n = 0
+		for _, r in ipairs(win._currentPage.Rows) do
+			if r.Visible and r:GetAttribute("CardBG") then
+				n = n + 1
+				if n > 14 then break end
+				r.BackgroundTransparency = 1
+				local st = r:FindFirstChildOfClass("UIStroke")
+				if st then st.Transparency = 1 end
+				local row, d = r, (n - 1) * 0.03
+				task.delay(d, function()
+					if not row.Parent then return end
+					TweenService:Create(row, TweenInfo.new(0.25), { BackgroundTransparency = 0 }):Play()
+					local s2 = row:FindFirstChildOfClass("UIStroke")
+					if s2 then TweenService:Create(s2, TweenInfo.new(0.25), { Transparency = 0.3 }):Play() end
+				end)
+			end
+		end
+	end
+	local function styleViewBtns(win)
+		local grid = win._view == "grid"
+		win._listBtn.BackgroundTransparency = grid and 1 or 0.15
+		win._gridBtn.BackgroundTransparency = grid and 0.15 or 1
+		win._listIco.ImageColor3 = grid and COLORS.Sub or COLORS.Text
+		win._gridIco.ImageColor3 = grid and COLORS.Text or COLORS.Sub
+	end
+	local function applyView(win, animate)
+		local grid = win._view == "grid"
+		win._listLayout.Enabled = not grid
+		win._gridLayout.Enabled = grid
+		syncPages(win)
+		applyFilter(win)
+		styleViewBtns(win)
+		if animate then animateCards(win) end
 	end
 
 	-- Sidebar-Section (Gruppen-Label), z.B. "MODULES" oder custom "AUTO FARM"
@@ -1184,6 +1434,7 @@ function SableLib:CreateWindow(opts)
 			applyFilter(win)
 			refreshHeader(win)
 			pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
+			animateCards(win)
 		end
 		Tab._select = function(fb, pg) selectTab(Tab, fb, pg) end
 
@@ -1221,6 +1472,7 @@ function SableLib:CreateWindow(opts)
 				applyFilter(win)
 				refreshHeader(win)
 				pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
+				animateCards(win)
 			end
 
 			local labelRow = create("TextButton", {
@@ -1247,24 +1499,44 @@ function SableLib:CreateWindow(opts)
 			end)
 
 			-- ROWS wie im Bild: eine durchgehende Card, Rows transparent mit Trennlinie
-			local function baseRow(height)
+			local function baseRow(height, isCard)
+				if isCard == nil then isCard = true end
 				local row = create("Frame", {
 					Parent = win._scroll,
 					Size = UDim2.new(1, 0, 0, height or 64),
-					BackgroundTransparency = 1,
+					BackgroundColor3 = COLORS.RowBG,
+					BackgroundTransparency = isCard and 0 or 1,
 					BorderSizePixel = 0,
 					Visible = (win._currentPage == Page),
 				})
-				padding(row, 22, 14, 22, 14)
-				create("Frame", {
-					Parent = row,
-					AnchorPoint = Vector2.new(0, 1),
-					Position = UDim2.new(0, -22, 1, 0),
-					Size = UDim2.new(1, 44, 0, 1),
-					BackgroundColor3 = COLORS.RowStroke,
-					BackgroundTransparency = 0.3,
-					BorderSizePixel = 0,
-				})
+				row:SetAttribute("CardBG", isCard)
+				if isCard then
+					corner(row, 12)
+					stroke(row, COLORS.RowStroke, 1, 0.3)
+					padding(row, 18, 14, 18, 14)
+					row.MouseEnter:Connect(function()
+						local c = COLORS.RowBG
+						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = Color3.new(math.min(c.R + 0.035, 1), math.min(c.G + 0.035, 1), math.min(c.B + 0.035, 1)) }):Play()
+						local st = row:FindFirstChildOfClass("UIStroke")
+						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.1 }):Play() end
+					end)
+					row.MouseLeave:Connect(function()
+						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = COLORS.RowBG }):Play()
+						local st = row:FindFirstChildOfClass("UIStroke")
+						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.3 }):Play() end
+					end)
+				else
+					padding(row, 22, 14, 22, 14)
+					create("Frame", {
+						Parent = row,
+						AnchorPoint = Vector2.new(0, 1),
+						Position = UDim2.new(0, -22, 1, 0),
+						Size = UDim2.new(1, 44, 0, 1),
+						BackgroundColor3 = COLORS.RowStroke,
+						BackgroundTransparency = 0.3,
+						BorderSizePixel = 0,
+					})
+				end
 				table.insert(Page.Rows, row)
 				return row
 			end
@@ -1293,6 +1565,15 @@ function SableLib:CreateWindow(opts)
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextYAlignment = Enum.TextYAlignment.Top,
 					TextWrapped = true,
+				})
+				create("ImageLabel", {
+					Parent = row,
+					AnchorPoint = Vector2.new(1, 0.5),
+					Position = UDim2.new(1, -64, 0.5, 0),
+					Size = UDim2.fromOffset(16, 16),
+					BackgroundTransparency = 1,
+					Image = SableLib:ResolveIcon("chevron-right") or "",
+					ImageColor3 = COLORS.Sub,
 				})
 
 				local state = tOpts.Default or false
@@ -1604,7 +1885,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddLabel(lOpts)
-				local row = baseRow(76)
+				local row = baseRow(76, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(0.5, 0, 0, 22),
@@ -1927,7 +2208,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddParagraph(pOpts)
-				local row = baseRow(96)
+				local row = baseRow(96, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, 0, 0, 22),
@@ -2459,7 +2740,7 @@ function SableLib:CreateWindow(opts)
 			end
 
 			function Page:AddCode(cOpts)
-				local row = baseRow(132)
+				local row = baseRow(132, false)
 				create("TextLabel", {
 					Parent = row,
 					Size = UDim2.new(1, -80, 0, 22),
