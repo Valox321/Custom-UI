@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.11-toggle"
+SableLib.Version = "1.12-glass"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -146,6 +146,20 @@ local function padding(parent, l, t, r, b)
 	})
 end
 
+-- Liquid-Glass: dezenter Top-Sheen per UIGradient (layout-sicher, kein Extra-Child).
+-- Multipliziert: oben exakte Farbe, unten Hauch dunkler = Glanz-Tiefe.
+local function glossBg(inst)
+	return create("UIGradient", {
+		Rotation = 90,
+		Color = ColorSequence.new({
+			ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(0.45, Color3.fromRGB(255, 255, 255)),
+			ColorSequenceKeypoint.new(1, Color3.fromRGB(213, 213, 220)),
+		}),
+		Parent = inst,
+	})
+end
+
 local function makeDraggable(main, handles)
 	local dragging = false
 	local dragStart, startPos
@@ -215,10 +229,12 @@ function SableLib:CreateWindow(opts)
 		Position = UDim2.new(0, 0, 0, 0),
 		Size = UDim2.new(1, 0, 1, -118),
 		BackgroundColor3 = COLORS.ContentBG,
+		BackgroundTransparency = 0.06,
 		BorderSizePixel = 0,
 	})
 	corner(contentCard, 20)
 	stroke(contentCard, COLORS.RowStroke, 1, 0.25)
+	glossBg(contentCard)
 
 	-- TOP PILLS innen (QB Aimbot / Smart Fit / Reach & Timing)
 	local topBar = create("Frame", {
@@ -302,10 +318,12 @@ function SableLib:CreateWindow(opts)
 		Position = UDim2.new(0, 0, 0, 0),
 		Size = UDim2.new(1, 0, 0, 92),
 		BackgroundColor3 = Color3.fromRGB(16, 17, 22),
+		BackgroundTransparency = 0.06,
 		BorderSizePixel = 0,
 	})
 	corner(navBg, 40)
 	stroke(navBg, COLORS.RowStroke, 1, 0.35)
+	glossBg(navBg)
 	local logo = create("TextLabel", {
 		Parent = bottomBar,
 		Size = UDim2.fromOffset(96, 56),
@@ -570,6 +588,7 @@ function SableLib:CreateWindow(opts)
 		})
 		corner(pill, 15)
 		stroke(pill, COLORS.RowStroke, 1, 0.3)
+		glossBg(pill)
 		create("UIListLayout", {
 			Parent = pill,
 			FillDirection = Enum.FillDirection.Horizontal,
@@ -691,6 +710,7 @@ function SableLib:CreateWindow(opts)
 			})
 			corner(topPill, 16)
 			stroke(topPill, COLORS.RowStroke, 1, 0.3)
+			glossBg(topPill)
 			buildPillContent(topPill, pageIcon, pageName, false)
 
 			local Page = {
@@ -788,6 +808,7 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(track, 17)
 				stroke(track, COLORS.RowStroke, 1, 0.5)
+				glossBg(track)
 				local knob = create("Frame", {
 					Parent = track,
 					AnchorPoint = Vector2.new(0, 0.5),
@@ -797,6 +818,7 @@ function SableLib:CreateWindow(opts)
 					BorderSizePixel = 0,
 				})
 				corner(knob, 14)
+				glossBg(knob)
 				create("UIScale", { Parent = knob, Scale = 1 })
 
 				local OFF_X = 4
@@ -896,6 +918,7 @@ function SableLib:CreateWindow(opts)
 					AutoButtonColor = true,
 				})
 				corner(btn, 8)
+				glossBg(btn)
 				btn.MouseButton1Click:Connect(function()
 					if bOpts.Callback then
 						pcall(bOpts.Callback)
@@ -944,6 +967,7 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(box, 12)
 				stroke(box, COLORS.RowStroke, 1, 0.2)
+				glossBg(box)
 
 				local label = create("TextLabel", {
 					Parent = box,
@@ -1285,6 +1309,7 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(box, 8)
 				stroke(box, COLORS.RowStroke, 1, 0.2)
+				glossBg(box)
 				padding(box, 10, 0, 10, 0)
 				box.FocusLost:Connect(function(enter)
 					if enter and iOpts.Callback then
@@ -1340,6 +1365,7 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(btn, 8)
 				stroke(btn, COLORS.RowStroke, 1, 0.2)
+				glossBg(btn)
 				local listening = false
 				btn.MouseButton1Click:Connect(function()
 					listening = true
@@ -1650,6 +1676,7 @@ function SableLib:CreateWindow(opts)
 						ZIndex = 61,
 					})
 					corner(cancelBtn, 20)
+					glossBg(cancelBtn)
 					local applyBtn = create("TextButton", {
 						Parent = pop,
 						Position = UDim2.new(0.5, 6, 0, 262),
@@ -1663,6 +1690,7 @@ function SableLib:CreateWindow(opts)
 						ZIndex = 61,
 					})
 					corner(applyBtn, 20)
+					glossBg(applyBtn)
 					pop.Size = UDim2.fromOffset(350, 318)
 
 					local function refresh()
