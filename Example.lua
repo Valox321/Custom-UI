@@ -2,9 +2,9 @@
 --// Je ein Tab pro Control-Typ in der Section "ELEMENTS"
 --// WICHTIG: immer DIESE Datei ausfuehren (Repo-Stand), keine alte Kopie!
 --// Lib-URL ist auf den Commit gepinnt (immer exakt diese Version, kein CDN-Lag)
-local URL = "https://cdn.jsdelivr.net/gh/Valox321/Custom-UI@df7831cf433953529f785b0cf1f796ad6f89aba3/SableLib.lua"
+local URL = "https://cdn.jsdelivr.net/gh/Valox321/Custom-UI@88e643c2da07959f7dab07134565352b4c5dc533/SableLib.lua"
 local src = game:HttpGet(URL, true)
-print("[sable] bytes:", #src, "| 1.44 drin:", src:find('Version = "1.44"', 1, true) ~= nil)
+print("[sable] bytes:", #src, "| 1.45 drin:", src:find('Version = "1.45"', 1, true) ~= nil)
 local Sable = loadstring(src)()
 print("[sable] lib version:", Sable.Version or "?")
 
@@ -15,6 +15,8 @@ local Window = Sable:CreateWindow({
 	ToggleKey = Enum.KeyCode.RightShift,
 	SearchPlaceholder = "Search modules",
 })
+
+Window:ShowLoading("Lädt Module...")
 
 -- ELEMENTS: je ein Tab pro Control-Typ
 Window:CreateSection("Elements")
@@ -36,6 +38,7 @@ RngPage:AddRangeSlider({ Name = "Delay", Description = "Zwei Knobs, ein Callback
 local DrpTab = Window:CreateTab({ Name = "Dropdown", Icon = "chevron-down", Section = "Elements" })
 local DrpPage = DrpTab:CreatePage({ Name = "Dropdown" })
 DrpPage:AddDropdown({ Name = "Mode", Description = "Single-Select mit Suche.", Options = { "Normal", "Legit", "Rage" }, Default = "Normal", Callback = function(v) print("Mode:", v) end })
+local multi = DrpPage:AddDropdown({ Name = "Mods", Description = "Multi-Select: bleibt offen.", Options = { "Fly", "Speed", "ESP", "Aim" }, Default = { "Fly" }, Multi = true, Callback = function(v) print("Mods:", table.concat(v, ", ")) end })
 
 local BtnTab = Window:CreateTab({ Name = "Button", Icon = "plus", Section = "Elements" })
 local BtnPage = BtnTab:CreatePage({ Name = "Button" })
@@ -55,3 +58,4 @@ ColPage:AddColorpicker({ Name = "Accent", Description = "Hex + Regler im Popup."
 ColPage:AddLabel({ Name = "Hinweis", Description = "So sieht ein Label aus.", Value = "rechts" })
 
 Window:Notify({ Title = "Prestige Client", Description = "UI geladen. RightShift = ein-/ausblenden.", Duration = 3 })
+task.delay(1, function() Window:HideLoading() end)
