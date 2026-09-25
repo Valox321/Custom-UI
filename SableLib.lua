@@ -1053,7 +1053,7 @@ function SableLib:CreateWindow(opts)
 					Parent = row,
 					Size = UDim2.new(1, -90, 0, 18),
 					BackgroundTransparency = 1,
-					Text = cOpts.Name or "Color",
+					Text = cOpts.Name or "Colorpicker",
 					Font = Enum.Font.GothamBold,
 					TextSize = 14,
 					TextColor3 = COLORS.Text,
@@ -1071,12 +1071,12 @@ function SableLib:CreateWindow(opts)
 					TextXAlignment = Enum.TextXAlignment.Left,
 					TextWrapped = true,
 				})
-				local col = cOpts.Default or Color3.fromRGB(242, 226, 184)
+				local col = cOpts.Default or Color3.fromRGB(48, 255, 106)
 				local preview = create("TextButton", {
 					Parent = row,
 					AnchorPoint = Vector2.new(1, 0.5),
 					Position = UDim2.new(1, 0, 0.5, 0),
-					Size = UDim2.fromOffset(60, 30),
+					Size = UDim2.fromOffset(44, 30),
 					BackgroundColor3 = col,
 					Text = "",
 					AutoButtonColor = false,
@@ -1086,104 +1086,314 @@ function SableLib:CreateWindow(opts)
 
 				local open = false
 				local pop = nil
-				local function makeChannel(parent, y, label, value)
-					create("TextLabel", {
-						Parent = parent,
-						Position = UDim2.new(0, 10, 0, y),
-						Size = UDim2.fromOffset(14, 20),
-						BackgroundTransparency = 1,
-						Text = label,
-						Font = Enum.Font.GothamBold,
-						TextSize = 12,
-						TextColor3 = COLORS.Sub,
-					})
-					local bar = create("TextButton", {
-						Parent = parent,
-						Position = UDim2.new(0, 28, 0, y + 5),
-						Size = UDim2.new(1, -56, 0, 10),
-						BackgroundColor3 = COLORS.TrackOff,
-						Text = "",
-						AutoButtonColor = false,
-					})
-					corner(bar, 5)
-					local fill = create("Frame", {
-						Parent = bar,
-						Size = UDim2.new(value / 255, 0, 1, 0),
-						BackgroundColor3 = COLORS.Beige,
-						BorderSizePixel = 0,
-					})
-					corner(fill, 5)
-					local num = create("TextLabel", {
-						Parent = parent,
-						AnchorPoint = Vector2.new(1, 0),
-						Position = UDim2.new(1, -10, 0, y),
-						Size = UDim2.fromOffset(30, 20),
-						BackgroundTransparency = 1,
-						Text = tostring(math.floor(value)),
-						Font = Enum.Font.GothamMedium,
-						TextSize = 12,
-						TextColor3 = COLORS.Text,
-						TextXAlignment = Enum.TextXAlignment.Right,
-					})
-					return bar, fill, num
+
+				local function toHex(c)
+					return string.format("#%02x%02x%02x", math.floor(c.R * 255 + 0.5), math.floor(c.G * 255 + 0.5), math.floor(c.B * 255 + 0.5))
+				end
+				local function fromHex(s)
+					s = string.gsub(string.lower(tostring(s or "")), "#", "")
+					if #s ~= 6 then return nil end
+					local r = tonumber(string.sub(s, 1, 2), 16)
+					local g = tonumber(string.sub(s, 3, 4), 16)
+					local b = tonumber(string.sub(s, 5, 6), 16)
+					if not r or not g or not b then return nil end
+					return Color3.fromRGB(r, g, b)
 				end
 
 				preview.MouseButton1Click:Connect(function()
 					if open and pop then open = false pop:Destroy() pop = nil return end
 					open = true
-					local r = math.floor(col.R * 255)
-					local g = math.floor(col.G * 255)
-					local b = math.floor(col.B * 255)
+					local orig = col
+					local h, s, v = col:ToHSV()
+					local cur = col
+					local syncing = false
+
 					pop = create("Frame", {
 						Parent = gui,
-						Size = UDim2.fromOffset(240, 132),
-						BackgroundColor3 = COLORS.PillBG,
+						Size = UDim2.fromOffset(350, 372),
+						BackgroundColor3 = Color3.fromRGB(22, 24, 33),
 						BorderSizePixel = 0,
 						ZIndex = 60,
 					})
-					corner(pop, 10)
+					corner(pop, 16)
 					stroke(pop, COLORS.RowStroke, 1, 0.1)
-					local p = preview.AbsolutePosition
-					pop.Position = UDim2.fromOffset(math.max(8, p.X - 180), p.Y + 36)
-					local rBar, rFill, rNum = makeChannel(pop, 10, "R", r)
-					local gBar, gFill, gNum = makeChannel(pop, 40, "G", g)
-					local bBar, bFill, bNum = makeChannel(pop, 70, "B", b)
-					-- simple click-to-set via closures capturing r/g/b refs:
-					local function setR(v) r = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
-					local function setG(v) g = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
-					local function setB(v) b = v col = Color3.fromRGB(r, g, b) preview.BackgroundColor3 = col if cOpts.Callback then pcall(cOpts.Callback, col) end end
-					local function hook(bar, fill, num, setFn)
-						local drag = false
-						bar.InputBegan:Connect(function(i)
-							if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = true end
-						end)
-						UserInputService.InputEnded:Connect(function(i)
-							if i.UserInputType == Enum.UserInputType.MouseButton1 then drag = false end
-						end)
-						UserInputService.InputChanged:Connect(function(i)
-							if drag and i.UserInputType == Enum.UserInputType.MouseMovement then
-								local ap = bar.AbsolutePosition
-								local as = bar.AbsoluteSize
-								local t = math.clamp((i.Position.X - ap.X) / math.max(1, as.X), 0, 1)
-								fill.Size = UDim2.new(t, 0, 1, 0)
-								num.Text = tostring(math.floor(t * 255))
-								setFn(math.floor(t * 255))
-							end
+					local pp = preview.AbsolutePosition
+					pop.Position = UDim2.fromOffset(math.clamp(pp.X - 300, 8, 1200), math.max(8, pp.Y - 120))
+
+					create("TextLabel", {
+						Parent = pop,
+						Position = UDim2.new(0, 16, 0, 12),
+						Size = UDim2.new(1, -32, 0, 22),
+						BackgroundTransparency = 1,
+						Text = cOpts.Name or "Colorpicker",
+						Font = Enum.Font.GothamBold,
+						TextSize = 16,
+						TextColor3 = COLORS.Text,
+						TextXAlignment = Enum.TextXAlignment.Left,
+						ZIndex = 61,
+					})
+
+					-- SV square
+					local svBox = create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0, 16, 0, 44),
+						Size = UDim2.fromOffset(176, 168),
+						BackgroundColor3 = Color3.fromHSV(h, 1, 1),
+						Text = "",
+						AutoButtonColor = false,
+						ZIndex = 61,
+					})
+					corner(svBox, 10)
+					local whiteOv = create("Frame", {
+						Parent = svBox,
+						Size = UDim2.new(1, 0, 1, 0),
+						BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+						BorderSizePixel = 0,
+						ZIndex = 62,
+					})
+					corner(whiteOv, 10)
+					create("UIGradient", {
+						Parent = whiteOv,
+						Rotation = 0,
+						Transparency = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 0),
+							NumberSequenceKeypoint.new(1, 1),
+						}),
+					})
+					local blackOv = create("Frame", {
+						Parent = svBox,
+						Size = UDim2.new(1, 0, 1, 0),
+						BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+						BorderSizePixel = 0,
+						BackgroundTransparency = 0,
+						ZIndex = 63,
+					})
+					corner(blackOv, 10)
+					create("UIGradient", {
+						Parent = blackOv,
+						Rotation = 90,
+						Transparency = NumberSequence.new({
+							NumberSequenceKeypoint.new(0, 1),
+							NumberSequenceKeypoint.new(1, 0),
+						}),
+					})
+					local svDot = create("Frame", {
+						Parent = svBox,
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Size = UDim2.fromOffset(14, 14),
+						BackgroundColor3 = cur,
+						BorderSizePixel = 0,
+						ZIndex = 64,
+					})
+					corner(svDot, 7)
+					stroke(svDot, Color3.fromRGB(255, 255, 255), 2, 0)
+
+					-- Hue bar
+					local hueBar = create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0, 200, 0, 44),
+						Size = UDim2.fromOffset(10, 168),
+						BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+						Text = "",
+						AutoButtonColor = false,
+						ZIndex = 61,
+					})
+					corner(hueBar, 5)
+					create("UIGradient", {
+						Parent = hueBar,
+						Rotation = 90,
+						Color = ColorSequence.new({
+							ColorSequenceKeypoint.new(0, Color3.fromRGB(255, 0, 0)),
+							ColorSequenceKeypoint.new(0.17, Color3.fromRGB(255, 255, 0)),
+							ColorSequenceKeypoint.new(0.33, Color3.fromRGB(0, 255, 0)),
+							ColorSequenceKeypoint.new(0.5, Color3.fromRGB(0, 255, 255)),
+							ColorSequenceKeypoint.new(0.67, Color3.fromRGB(0, 0, 255)),
+							ColorSequenceKeypoint.new(0.83, Color3.fromRGB(255, 0, 255)),
+							ColorSequenceKeypoint.new(1, Color3.fromRGB(255, 0, 0)),
+						}),
+					})
+					local hueDot = create("Frame", {
+						Parent = hueBar,
+						AnchorPoint = Vector2.new(0.5, 0.5),
+						Size = UDim2.fromOffset(14, 14),
+						BackgroundColor3 = Color3.fromRGB(255, 255, 255),
+						BorderSizePixel = 0,
+						ZIndex = 64,
+					})
+					corner(hueDot, 7)
+					stroke(hueDot, Color3.fromRGB(255, 255, 255), 2, 0)
+
+					-- Right inputs (Hex / R / G / B)
+					local function makeField(y, initial, tag)
+						local holder = create("Frame", {
+							Parent = pop,
+							Position = UDim2.new(0, 222, 0, y),
+							Size = UDim2.new(1, -234, 0, 34),
+							BackgroundColor3 = Color3.fromRGB(32, 35, 47),
+							BorderSizePixel = 0,
+							ZIndex = 61,
+						})
+						corner(holder, 8)
+						local tb = create("TextBox", {
+							Parent = holder,
+							Position = UDim2.new(0, 10, 0, 0),
+							Size = UDim2.new(1, -58, 1, 0),
+							BackgroundTransparency = 1,
+							Text = initial,
+							Font = Enum.Font.GothamMedium,
+							TextSize = 12,
+							TextColor3 = COLORS.Text,
+							TextXAlignment = Enum.TextXAlignment.Left,
+							ClearTextOnFocus = false,
+							ZIndex = 62,
+						})
+						create("TextLabel", {
+							Parent = holder,
+							AnchorPoint = Vector2.new(1, 0.5),
+							Position = UDim2.new(1, -10, 0.5, 0),
+							Size = UDim2.fromOffset(44, 16),
+							BackgroundTransparency = 1,
+							Text = tag,
+							Font = Enum.Font.Gotham,
+							TextSize = 12,
+							TextColor3 = COLORS.Sub,
+							TextXAlignment = Enum.TextXAlignment.Right,
+							ZIndex = 62,
+						})
+						return tb
+					end
+					local hexBox = makeField(44, toHex(cur), "Hex")
+					local rBox = makeField(86, tostring(math.floor(cur.R * 255 + 0.5)), "Red")
+					local gBox = makeField(128, tostring(math.floor(cur.G * 255 + 0.5)), "Green")
+					local bBox = makeField(170, tostring(math.floor(cur.B * 255 + 0.5)), "Blue")
+
+					-- Preview bars (old vs new)
+					local oldPrev = create("Frame", {
+						Parent = pop,
+						Position = UDim2.new(0, 16, 0, 224),
+						Size = UDim2.new(0.5, -22, 0, 24),
+						BackgroundColor3 = orig,
+						BorderSizePixel = 0,
+						ZIndex = 61,
+					})
+					corner(oldPrev, 7)
+					local newPrev = create("Frame", {
+						Parent = pop,
+						Position = UDim2.new(0.5, 6, 0, 224),
+						Size = UDim2.new(0.5, -22, 0, 24),
+						BackgroundColor3 = cur,
+						BorderSizePixel = 0,
+						ZIndex = 61,
+					})
+					corner(newPrev, 7)
+
+					-- Buttons
+					local cancelBtn = create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0, 16, 0, 262),
+						Size = UDim2.new(0.5, -22, 0, 40),
+						BackgroundColor3 = Color3.fromRGB(40, 43, 57),
+						Text = "Abbrechen",
+						Font = Enum.Font.GothamBold,
+						TextSize = 14,
+						TextColor3 = COLORS.Text,
+						AutoButtonColor = false,
+						ZIndex = 61,
+					})
+					corner(cancelBtn, 20)
+					local applyBtn = create("TextButton", {
+						Parent = pop,
+						Position = UDim2.new(0.5, 6, 0, 262),
+						Size = UDim2.new(0.5, -22, 0, 40),
+						BackgroundColor3 = Color3.fromRGB(160, 165, 185),
+						Text = "Apply",
+						Font = Enum.Font.GothamBold,
+						TextSize = 14,
+						TextColor3 = Color3.fromRGB(25, 25, 30),
+						AutoButtonColor = false,
+						ZIndex = 61,
+					})
+					corner(applyBtn, 20)
+					pop.Size = UDim2.fromOffset(350, 318)
+
+					local function refresh()
+						syncing = true
+						svBox.BackgroundColor3 = Color3.fromHSV(h, 1, 1)
+						svDot.Position = UDim2.new(s, 0, 1 - v, 0)
+						svDot.BackgroundColor3 = cur
+						hueDot.Position = UDim2.new(0.5, 0, h, 0)
+						newPrev.BackgroundColor3 = cur
+						hexBox.Text = toHex(cur)
+						rBox.Text = tostring(math.floor(cur.R * 255 + 0.5))
+						gBox.Text = tostring(math.floor(cur.G * 255 + 0.5))
+						bBox.Text = tostring(math.floor(cur.B * 255 + 0.5))
+						syncing = false
+					end
+					refresh()
+
+					local dragSV, dragH = false, false
+					local function setSV(pos)
+						local ap = svBox.AbsolutePosition
+						local as = svBox.AbsoluteSize
+						s = math.clamp((pos.X - ap.X) / math.max(1, as.X), 0, 1)
+						v = 1 - math.clamp((pos.Y - ap.Y) / math.max(1, as.Y), 0, 1)
+						cur = Color3.fromHSV(h, s, v)
+						refresh()
+					end
+					local function setH(pos)
+						local ap = hueBar.AbsolutePosition
+						local as = hueBar.AbsoluteSize
+						h = math.clamp((pos.Y - ap.Y) / math.max(1, as.Y), 0, 1)
+						cur = Color3.fromHSV(h, s, v)
+						refresh()
+					end
+					svBox.InputBegan:Connect(function(i)
+						if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+							dragSV = true setSV(i.Position)
+						end
+					end)
+					hueBar.InputBegan:Connect(function(i)
+						if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+							dragH = true setH(i.Position)
+						end
+					end)
+					UserInputService.InputEnded:Connect(function(i)
+						if i.UserInputType == Enum.UserInputType.MouseButton1 then dragSV = false dragH = false end
+					end)
+					UserInputService.InputChanged:Connect(function(i)
+						if i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch then
+							if dragSV then setSV(i.Position) end
+							if dragH then setH(i.Position) end
+						end
+					end)
+
+					hexBox.FocusLost:Connect(function(enter)
+						if not enter or syncing then return end
+						local c = fromHex(hexBox.Text)
+						if c then
+							h, s, v = c:ToHSV() cur = c refresh()
+						else
+							hexBox.Text = toHex(cur)
+						end
+					end)
+					local function bindNum(box)
+						box.FocusLost:Connect(function(enter)
+							if not enter or syncing then return end
+							local r = math.clamp(tonumber(rBox.Text) or (cur.R * 255), 0, 255)
+							local g = math.clamp(tonumber(gBox.Text) or (cur.G * 255), 0, 255)
+							local b = math.clamp(tonumber(bBox.Text) or (cur.B * 255), 0, 255)
+							cur = Color3.fromRGB(r, g, b) h, s, v = cur:ToHSV() refresh()
 						end)
 					end
-					hook(rBar, rFill, rNum, setR)
-					hook(gBar, gFill, gNum, setG)
-					hook(bBar, bFill, bNum, setB)
-					create("TextButton", {
-						Parent = pop,
-						Position = UDim2.new(0, 10, 0, 100),
-						Size = UDim2.new(1, -20, 0, 22),
-						BackgroundColor3 = COLORS.Beige,
-						Text = "Done",
-						Font = Enum.Font.GothamBold,
-						TextSize = 12,
-						TextColor3 = COLORS.BeigeText,
-					}).MouseButton1Click:Connect(function()
+					bindNum(rBox) bindNum(gBox) bindNum(bBox)
+
+					cancelBtn.MouseButton1Click:Connect(function()
+						open = false if pop then pop:Destroy() pop = nil end
+					end)
+					applyBtn.MouseButton1Click:Connect(function()
+						col = cur
+						preview.BackgroundColor3 = col
+						if cOpts.Callback then pcall(cOpts.Callback, col) end
 						open = false if pop then pop:Destroy() pop = nil end
 					end)
 				end)
