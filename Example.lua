@@ -115,7 +115,7 @@ P5:AddInput({ Name = "Name", Description = "Zweites Input.", Placeholder = "Type
 local P6 = KeyTab:CreatePage({ Name = "Keybinds", Icon = "command" })
 P6:AddSection({ Name = "Keybind" })
 P6:AddKeybind({ Name = "Farm Key", Description = "Nur Aktion, kein Menü-Toggle.", Default = Enum.KeyCode.F, Callback = print })
-P6:AddKeybind({ Name = "Menu Key", Description = "Stellt die Menü-Taste um.", Default = Enum.KeyCode.RightShift, Callback = function(k) if Window.SetToggleKey then Window:SetToggleKey(k) Window:Notify({ Title = "sable", Description = "Menu key: " .. k.Name }) else Window:Notify({ Title = "sable", Description = "Lib zu alt - neu executen!" }) warn("[sable] SetToggleKey fehlt, Lib-Version zu alt") end end })
+P6:AddKeybind({ Name = "Menu Key", Description = "Stellt die Menü-Taste um.", Default = Enum.KeyCode.RightShift, Callback = function(k) if not Window.SetToggleKey then return end if Window._toggleKey ~= k then Window:SetToggleKey(k) Window:Notify({ Title = "sable", Description = "Menu key: " .. k.Name }) end end })
 
 local P7 = ColorTab:CreatePage({ Name = "Colors", Icon = "palette" })
 P7:AddSection({ Name = "Colorpicker" })

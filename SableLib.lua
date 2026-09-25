@@ -320,6 +320,12 @@ function SableLib:CreateWindow(opts)
 		self._visible = not self._visible
 		gui.Enabled = self._visible
 	end
+	Window._popups = {}
+	local function closeAllPopups(win)
+		for _, c in ipairs(win._popups) do
+			pcall(c)
+		end
+	end
 
 	-- toggle visibility (nutzt Window._toggleKey, damit Keybinds sie ändern können)
 	UserInputService.InputBegan:Connect(function(input, gpe)
@@ -440,6 +446,7 @@ function SableLib:CreateWindow(opts)
 
 		local function selectTab(target)
 			local win = target.ParentWindow
+			closeAllPopups(win)
 			win._currentTab = target
 			for _, t in ipairs(win._tabs) do
 				stylePill(t.Button, t == target)
@@ -505,6 +512,7 @@ function SableLib:CreateWindow(opts)
 			}
 
 			local function selectPage()
+				closeAllPopups(win)
 				win._currentTab = self
 				win._currentPage = Page
 				for _, t in ipairs(win._tabs) do
@@ -730,14 +738,16 @@ function SableLib:CreateWindow(opts)
 						listFrame = nil
 					end
 				end
+				table.insert(win._popups, closeList)
 				box.MouseButton1Click:Connect(function()
 					if open then
 						closeList()
 						return
 					end
+					closeAllPopups(win)
 					open = true
 					listFrame = create("Frame", {
-						Parent = gui,
+						Parent = main,
 						Size = UDim2.fromOffset(178, math.min(#options * 32 + 8, 160)),
 						BackgroundColor3 = COLORS.PillBG,
 						BorderSizePixel = 0,
@@ -746,9 +756,11 @@ function SableLib:CreateWindow(opts)
 					corner(listFrame, 10)
 					stroke(listFrame, COLORS.RowStroke, 1, 0.1)
 					padding(listFrame, 4, 4, 4, 4)
+					-- relativ zum Main-Frame, damit die Liste beim Draggen mitwandert
 					local absPos = box.AbsolutePosition
 					local absSize = box.AbsoluteSize
-					listFrame.Position = UDim2.fromOffset(absPos.X, absPos.Y + absSize.Y + 4)
+					local mPos = main.AbsolutePosition
+					listFrame.Position = UDim2.fromOffset(absPos.X - mPos.X, absPos.Y - mPos.Y + absSize.Y + 4)
 					create("UIListLayout", { Parent = listFrame, Padding = UDim.new(0, 2), SortOrder = Enum.SortOrder.LayoutOrder })
 					for _, opt in ipairs(options) do
 						local ob = create("TextButton", {
@@ -1172,8 +1184,17 @@ function SableLib:CreateWindow(opts)
 					return Color3.fromRGB(r, g, b)
 				end
 
+				local open = false
+				local pop = nil
+				local function closePop()
+					open = false
+					if pop then pop:Destroy() pop = nil end
+				end
+				table.insert(win._popups, closePop)
+
 				preview.MouseButton1Click:Connect(function()
-					if open and pop then open = false pop:Destroy() pop = nil return end
+					if open and pop then closePop() return end
+					closeAllPopups(win)
 					open = true
 					local orig = col
 					local h, s, v = col:ToHSV()
@@ -1181,7 +1202,7 @@ function SableLib:CreateWindow(opts)
 					local syncing = false
 
 					pop = create("Frame", {
-						Parent = gui,
+						Parent = main,
 						Size = UDim2.fromOffset(350, 372),
 						BackgroundColor3 = Color3.fromRGB(22, 24, 33),
 						BorderSizePixel = 0,
@@ -1189,8 +1210,13 @@ function SableLib:CreateWindow(opts)
 					})
 					corner(pop, 16)
 					stroke(pop, COLORS.RowStroke, 1, 0.1)
+					-- relativ zum Main, damit das Popup beim Draggen mitwandert
 					local pp = preview.AbsolutePosition
-					pop.Position = UDim2.fromOffset(math.clamp(pp.X - 300, 8, 1200), math.max(8, pp.Y - 120))
+					local mPos = main.AbsolutePosition
+					local mSize = main.AbsoluteSize
+					local rx = math.clamp(pp.X - mPos.X - 180, 8, math.max(8, mSize.X - 358))
+					local ry = math.clamp(pp.Y - mPos.Y - 40, 46, math.max(50, mSize.Y - 200))
+					pop.Position = UDim2.fromOffset(rx, ry)
 
 					create("TextLabel", {
 						Parent = pop,
