@@ -7,7 +7,7 @@
 --// Page:AddToggle({ Name = "...", Description = "...", Default = false, Callback = function(v) end })
 
 local SableLib = {}
-SableLib.Version = "1.9-exact"
+SableLib.Version = "1.10-pages-in"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -208,12 +208,24 @@ function SableLib:CreateWindow(opts)
 		BorderSizePixel = 0,
 	})
 
-	-- TOP PILLS (Level Up / Mobs / Bosses)
+	-- CONTENT CARD (Top-Pills sitzen INNEN wie im Bild)
+	local contentCard = create("Frame", {
+		Name = "Content",
+		Parent = main,
+		Position = UDim2.new(0, 0, 0, 0),
+		Size = UDim2.new(1, 0, 1, -118),
+		BackgroundColor3 = COLORS.ContentBG,
+		BorderSizePixel = 0,
+	})
+	corner(contentCard, 20)
+	stroke(contentCard, COLORS.RowStroke, 1, 0.25)
+
+	-- TOP PILLS innen (QB Aimbot / Smart Fit / Reach & Timing)
 	local topBar = create("Frame", {
 		Name = "TopBar",
-		Parent = main,
-		Size = UDim2.new(1, 0, 0, 54),
-		Position = UDim2.new(0, 0, 0, 0),
+		Parent = contentCard,
+		Size = UDim2.new(1, -36, 0, 48),
+		Position = UDim2.new(0, 18, 0, 14),
 		BackgroundTransparency = 1,
 	})
 	create("UIListLayout", {
@@ -224,22 +236,11 @@ function SableLib:CreateWindow(opts)
 		VerticalAlignment = Enum.VerticalAlignment.Center,
 	})
 
-	-- CONTENT CARD
-	local contentCard = create("Frame", {
-		Name = "Content",
-		Parent = main,
-		Position = UDim2.new(0, 0, 0, 62),
-		Size = UDim2.new(1, 0, 1, -180),
-		BackgroundColor3 = COLORS.ContentBG,
-		BorderSizePixel = 0,
-	})
-	corner(contentCard, 20)
-	stroke(contentCard, COLORS.RowStroke, 1, 0.25)
-
 	local scroll = create("ScrollingFrame", {
 		Name = "List",
 		Parent = contentCard,
-		Size = UDim2.new(1, 0, 1, 0),
+		Position = UDim2.new(0, 0, 0, 96),
+		Size = UDim2.new(1, 0, 1, -96),
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 		ScrollBarThickness = 5,
