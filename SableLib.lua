@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.40"
+SableLib.Version = "1.41"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -687,6 +687,48 @@ local function makeDraggable(main, handles)
 	end)
 end
 
+-- Zentrales Motion-System: dezent, konsistent, konfigurierbar
+SableLib.Motion = {
+	HoverDuration = 0.15,
+	PressDuration = 0.08,
+	OpenDuration = 0.22,
+	CloseDuration = 0.18,
+	EasingStyle = Enum.EasingStyle.Quint,
+	EasingDirection = Enum.EasingDirection.Out,
+}
+local Motion = SableLib.Motion
+local activeTweens = setmetatable({}, { __mode = "k" })
+local function tw(obj, dur, props, style, dir)
+	local old = activeTweens[obj]
+	if old then pcall(function() old:Cancel() end) end
+	local ntw = TweenService:Create(obj, TweenInfo.new(dur or 0.15, style or Motion.EasingStyle, dir or Motion.EasingDirection), props)
+	activeTweens[obj] = ntw
+	ntw:Play()
+	return ntw
+end
+local function ensureScale(obj)
+	local s = obj:FindFirstChildOfClass("UIScale")
+	if not s then s = Instance.new("UIScale"); s.Scale = 1; s.Parent = obj end
+	return s
+end
+local function pressify(btn)
+	if btn:GetAttribute("SablePress") then return end
+	btn:SetAttribute("SablePress", true)
+	local sc = ensureScale(btn)
+	btn.InputBegan:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			tw(sc, Motion.PressDuration, { Scale = 0.97 })
+		end
+	end)
+	btn.InputEnded:Connect(function(i)
+		if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+			tw(sc, Motion.PressDuration, { Scale = 1 })
+		end
+	end)
+	btn.MouseLeave:Connect(function()
+		tw(sc, Motion.PressDuration, { Scale = 1 })
+	end)
+end
 function SableLib:CreateWindow(opts)
 	opts = opts or {}
 	local winName = opts.Name or "sable"
@@ -864,6 +906,24 @@ function SableLib:CreateWindow(opts)
 		SortOrder = Enum.SortOrder.LayoutOrder,
 		Padding = UDim.new(0, 2),
 	})
+	local indicator = create("Frame", {
+		Name = "Indicator",
+		Parent = sidebar,
+		Size = UDim2.fromOffset(3, 22),
+		BackgroundColor3 = COLORS.Beige,
+		BorderSizePixel = 0,
+		Visible = false,
+	})
+	corner(indicator, 2)
+	glowStroke(indicator).Transparency = 0.7
+	local function positionIndicator(win)
+		local tab = win._currentTab
+		local btn = tab and tab.Button
+		if not btn or not btn.Parent then indicator.Visible = false return end
+		local y = btn.AbsolutePosition.Y - sidebar.AbsolutePosition.Y + (btn.AbsoluteSize.Y - 22) / 2
+		indicator.Visible = true
+		tw(indicator, Motion.OpenDuration, { Position = UDim2.new(0, 5, 0, y) })
+	end
 
 	-- CONTENT
 	local content = create("Frame", {
@@ -935,6 +995,14 @@ function SableLib:CreateWindow(opts)
 		TextXAlignment = Enum.TextXAlignment.Left,
 		ClearTextOnFocus = false,
 	})
+	searchBox.Focused:Connect(function()
+		tw(searchFrame, Motion.HoverDuration, { BackgroundColor3 = COLORS.RowBG })
+		glowStroke(searchFrame).Transparency = 0.6
+	end)
+	searchBox.FocusLost:Connect(function()
+		tw(searchFrame, Motion.HoverDuration, { BackgroundColor3 = COLORS.ContentBG })
+		glowStroke(searchFrame).Transparency = 0.85
+	end)
 	local backBtn = create("TextButton", {
 		Parent = header,
 		Position = UDim2.new(0, 0, 0, 48),
@@ -1017,6 +1085,9 @@ function SableLib:CreateWindow(opts)
 	end
 	local listBtn, listIco = viewBtn("list", 0)
 	local gridBtn, gridIco = viewBtn("layout-grid", 36)
+	pressify(backBtn)
+	pressify(listBtn)
+	pressify(gridBtn)
 	local card = create("Frame", {
 		Name = "Card",
 		Parent = content,
@@ -1168,7 +1239,22 @@ function SableLib:CreateWindow(opts)
 	end
 	function Window:Toggle()
 		self._visible = not self._visible
-		gui.Enabled = self._visible
+		if self._visible then
+			gui.Enabled = true
+			local sc = ensureScale(container)
+			sc.Scale = 0.97
+			tw(sc, 0.15, { Scale = 1 })
+		else
+			local sc = ensureScale(container)
+			tw(sc, 0.12, { Scale = 0.97 })
+			local tok = (self._togTok or 0) + 1
+			self._togTok = tok
+			task.delay(0.12, function()
+				if self._togTok == tok and not self._visible then
+					gui.Enabled = false
+				end
+			end)
+		end
 	end
 	function Window:SetChip(text)
 		if text and text ~= "" then
@@ -1199,8 +1285,7 @@ function SableLib:CreateWindow(opts)
 	UserInputService.InputBegan:Connect(function(input, gpe)
 		if gpe then return end
 		if input.KeyCode == Window._toggleKey then
-			Window._visible = not Window._visible
-			gui.Enabled = Window._visible
+			Window:Toggle()
 		end
 	end)
 
@@ -1235,7 +1320,7 @@ function SableLib:CreateWindow(opts)
 	end
 
 	-- Sichtbarkeit aller Rows neu berechnen (aktive Page + Search)
-	local function applyFilter(win)
+	local function applyFilter(win, fromSearch)
 		local q = string.lower(win._searchBox.Text or "")
 		local shown = 0
 		for _, p in ipairs(win._pages) do
@@ -1244,10 +1329,23 @@ function SableLib:CreateWindow(opts)
 				if not active then
 					r.Visible = false
 				elseif q == "" then
-					r.Visible = true
+					if fromSearch and not r.Visible then
+						r.Visible = true
+						r.BackgroundTransparency = 1
+						tw(r, 0.18, { BackgroundTransparency = r:GetAttribute("CardBG") and 0 or 1 })
+					else
+						r.Visible = true
+					end
 					shown = shown + 1
 				else
-					r.Visible = string.find(string.lower(rowText(r)), q, 1, true) ~= nil
+					local hit = string.find(string.lower(rowText(r)), q, 1, true) ~= nil
+					if hit and fromSearch and not r.Visible then
+						r.Visible = true
+						r.BackgroundTransparency = 1
+						tw(r, 0.18, { BackgroundTransparency = r:GetAttribute("CardBG") and 0 or 1 })
+					else
+						r.Visible = hit
+					end
 					if r.Visible then shown = shown + 1 end
 				end
 			end
@@ -1274,15 +1372,32 @@ function SableLib:CreateWindow(opts)
 			if r.Visible and r:GetAttribute("CardBG") then
 				n = n + 1
 				if n > 14 then break end
+				local sc = ensureScale(r)
+				sc.Scale = 0.97
 				r.BackgroundTransparency = 1
 				local st = r:FindFirstChildOfClass("UIStroke")
 				if st then st.Transparency = 1 end
+				local texts = {}
+				for _, d in ipairs(r:GetDescendants()) do
+					if d:IsA("TextLabel") then
+						d.TextTransparency = 1
+						texts[#texts + 1] = d
+					elseif d:IsA("ImageLabel") then
+						d.ImageTransparency = 1
+						texts[#texts + 1] = d
+					end
+				end
 				local row, d = r, (n - 1) * 0.03
 				task.delay(d, function()
 					if not row.Parent then return end
-					TweenService:Create(row, TweenInfo.new(0.25), { BackgroundTransparency = 0 }):Play()
+					tw(row, 0.25, { BackgroundTransparency = 0 })
+					tw(sc, 0.25, { Scale = 1 })
 					local s2 = row:FindFirstChildOfClass("UIStroke")
-					if s2 then TweenService:Create(s2, TweenInfo.new(0.25), { Transparency = 0.3 }):Play() end
+					if s2 then tw(s2, 0.25, { Transparency = 0.3 }) end
+					for _, t2 in ipairs(texts) do
+						if t2:IsA("TextLabel") then tw(t2, 0.25, { TextTransparency = 0 })
+						else tw(t2, 0.25, { ImageTransparency = 0 }) end
+					end
 				end)
 			end
 		end
@@ -1305,7 +1420,7 @@ function SableLib:CreateWindow(opts)
 		local cw = math.floor((w - (n - 1) * 8) / n)
 		win._gridLayout.CellSize = UDim2.new(0, cw, 0, 110)
 	end
-	local function applyView(win, animate)
+	local function doApplyView(win)
 		local grid = win._view == "grid"
 		for _, p in ipairs(win._pages) do
 			for _, r in ipairs(p.Rows) do
@@ -1322,7 +1437,21 @@ function SableLib:CreateWindow(opts)
 		syncPages(win)
 		applyFilter(win)
 		styleViewBtns(win)
-		if animate then animateCards(win) end
+	end
+	local function applyView(win, animate)
+		if not animate then doApplyView(win) return end
+		win._viewToken = (win._viewToken or 0) + 1
+		local tok = win._viewToken
+		if win._currentPage then
+			for _, r in ipairs(win._currentPage.Rows) do
+				if r.Visible then tw(r, 0.07, { BackgroundTransparency = 1 }) end
+			end
+		end
+		task.delay(0.08, function()
+			if win._viewToken ~= tok then return end
+			doApplyView(win)
+			animateCards(win)
+		end)
 	end
 
 	function Window:SetView(v)
@@ -1409,13 +1538,14 @@ function SableLib:CreateWindow(opts)
 			LayoutOrder = self._sideOrder,
 		})
 		corner(btn, 10)
+		local iconLbl = nil
 		do
 			local img = nil
 			if isLucideName(icon) or string.find(icon, "rbxassetid", 1, true) then
 				img = SableLib:ResolveIcon(icon)
 			end
 			if img then
-				create("ImageLabel", {
+				iconLbl = create("ImageLabel", {
 					Parent = btn,
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.new(0, 12, 0.5, 0),
@@ -1425,7 +1555,7 @@ function SableLib:CreateWindow(opts)
 					ImageColor3 = COLORS.Sub,
 				})
 			elseif icon ~= "" then
-				create("TextLabel", {
+				iconLbl = create("TextLabel", {
 					Parent = btn,
 					AnchorPoint = Vector2.new(0, 0.5),
 					Position = UDim2.new(0, 12, 0.5, 0),
@@ -1438,7 +1568,7 @@ function SableLib:CreateWindow(opts)
 				})
 			end
 		end
-		create("TextLabel", {
+		local nameLbl = create("TextLabel", {
 			Parent = btn,
 			Position = UDim2.new(0, 40, 0, 0),
 			Size = UDim2.new(1, -88, 1, 0),
@@ -1466,6 +1596,23 @@ function SableLib:CreateWindow(opts)
 		end
 		local Tab = { Name = tabName, Title = tabOpts.Title, Count = tabOpts.Count, Group = group, Button = btn, Pages = {}, ParentWindow = self }
 		sideStyle(btn, isActive)
+		btn.MouseEnter:Connect(function()
+			if self._currentTab == Tab then return end
+			tw(btn, Motion.HoverDuration, { BackgroundColor3 = COLORS.PillActive, BackgroundTransparency = 0.85 })
+			if iconLbl then tw(iconLbl, Motion.HoverDuration, { Position = UDim2.new(0, 15, 0.5, 0) }) end
+			tw(nameLbl, Motion.HoverDuration, { Position = UDim2.new(0, 43, 0, 0) })
+			glowStroke(btn).Transparency = 0.8
+		end)
+		btn.MouseLeave:Connect(function()
+			if self._currentTab == Tab then return end
+			tw(btn, Motion.HoverDuration, { BackgroundColor3 = COLORS.PillBG, BackgroundTransparency = 1 })
+			if iconLbl then tw(iconLbl, Motion.HoverDuration, { Position = UDim2.new(0, 12, 0.5, 0) }) end
+			tw(nameLbl, Motion.HoverDuration, { Position = UDim2.new(0, 40, 0, 0) })
+			glowStroke(btn).Transparency = 1
+		end)
+		pressify(btn)
+		Tab._iconLbl = iconLbl
+		Tab._nameLbl = nameLbl
 		local function selectTab(target, fromBack, pageOverride)
 			local win = target.ParentWindow
 			closeAllPopups(win)
@@ -1490,6 +1637,14 @@ function SableLib:CreateWindow(opts)
 			refreshHeader(win)
 			pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
 			pcall(function() win._gridScroll.CanvasPosition = Vector2.new(0, 0) end)
+			for _, t2 in ipairs(win._tabs) do
+				if t2._iconLbl then t2._iconLbl.Position = UDim2.new(0, 12, 0.5, 0) end
+				if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
+			end
+			positionIndicator(win)
+			local cp = card.Position
+			card.Position = UDim2.new(cp.X.Scale, cp.X.Offset + 8, cp.Y.Scale, cp.Y.Offset)
+			tw(card, 0.2, { Position = UDim2.new(cp.X.Scale, cp.X.Offset, cp.Y.Scale, cp.Y.Offset) })
 			animateCards(win)
 		end
 		Tab._select = function(fb, pg) selectTab(Tab, fb, pg) end
@@ -1529,6 +1684,14 @@ function SableLib:CreateWindow(opts)
 				refreshHeader(win)
 				pcall(function() win._scroll.CanvasPosition = Vector2.new(0, 0) end)
 				pcall(function() win._gridScroll.CanvasPosition = Vector2.new(0, 0) end)
+				for _, t2 in ipairs(win._tabs) do
+					if t2._iconLbl then t2._iconLbl.Position = UDim2.new(0, 12, 0.5, 0) end
+					if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
+				end
+				positionIndicator(win)
+				local cp2 = card.Position
+				card.Position = UDim2.new(cp2.X.Scale, cp2.X.Offset + 8, cp2.Y.Scale, cp2.Y.Offset)
+				tw(card, 0.2, { Position = UDim2.new(cp2.X.Scale, cp2.X.Offset, cp2.Y.Scale, cp2.Y.Offset) })
 				animateCards(win)
 			end
 
@@ -1571,18 +1734,21 @@ function SableLib:CreateWindow(opts)
 					corner(row, 12)
 					stroke(row, COLORS.RowStroke, 1, 0.3)
 					padding(row, 16, 10, 16, 10)
+					local rowScale = ensureScale(row)
 					row.MouseEnter:Connect(function()
 						local c = COLORS.RowBG
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = Color3.new(math.min(c.R + 0.035, 1), math.min(c.G + 0.035, 1), math.min(c.B + 0.035, 1)) }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.1 }):Play() end
 						glowStroke(row, COLORS.RowStroke).Transparency = 0.55
+						tw(rowScale, Motion.HoverDuration, { Scale = 1.01 })
 					end)
 					row.MouseLeave:Connect(function()
 						TweenService:Create(row, TweenInfo.new(0.15), { BackgroundColor3 = COLORS.RowBG }):Play()
 						local st = row:FindFirstChildOfClass("UIStroke")
 						if st then TweenService:Create(st, TweenInfo.new(0.15), { Transparency = 0.3 }):Play() end
 						glowStroke(row).Transparency = 1
+						tw(rowScale, Motion.HoverDuration, { Scale = 1 })
 					end)
 				else
 					padding(row, 22, 14, 22, 14)
@@ -1811,6 +1977,7 @@ function SableLib:CreateWindow(opts)
 				})
 				corner(btn, 8)
 				glossBg(btn)
+				pressify(btn)
 				btn.MouseButton1Click:Connect(function()
 					if bOpts.Callback then
 						pcall(bOpts.Callback)
@@ -1858,6 +2025,7 @@ function SableLib:CreateWindow(opts)
 					AutoButtonColor = false,
 				})
 				corner(box, 12)
+				pressify(box)
 				stroke(box, COLORS.RowStroke, 1, 0.2)
 				glossBg(box)
 
@@ -1890,8 +2058,15 @@ function SableLib:CreateWindow(opts)
 				local function closeList()
 					open = false
 					if listFrame then
-						listFrame:Destroy()
+						local lf = listFrame
 						listFrame = nil
+						tw(lf, Motion.CloseDuration, { BackgroundTransparency = 1 })
+						for _, d in ipairs(lf:GetDescendants()) do
+							if d:IsA("TextLabel") or d:IsA("TextButton") then
+								tw(d, Motion.CloseDuration, { BackgroundTransparency = 1, TextTransparency = 1 })
+							end
+						end
+						task.delay(0.12, function() pcall(function() lf:Destroy() end) end)
 					end
 				end
 				table.insert(win._popups, closeList)
@@ -1912,6 +2087,9 @@ function SableLib:CreateWindow(opts)
 					corner(listFrame, 10)
 					stroke(listFrame, COLORS.RowStroke, 1, 0.1)
 					padding(listFrame, 4, 4, 4, 4)
+				local listScale = ensureScale(listFrame)
+				listScale.Scale = 0.98
+				tw(listScale, 0.15, { Scale = 1 })
 					-- relativ zum Main-Frame, damit die Liste beim Draggen mitwandert
 					local absPos = box.AbsolutePosition
 					local absSize = box.AbsoluteSize
@@ -1932,6 +2110,12 @@ function SableLib:CreateWindow(opts)
 							ZIndex = 51,
 						})
 						corner(ob, 8)
+					ob.MouseEnter:Connect(function()
+						tw(ob, Motion.HoverDuration, { BackgroundTransparency = 0.5 })
+					end)
+					ob.MouseLeave:Connect(function()
+						tw(ob, Motion.HoverDuration, { BackgroundTransparency = 0 })
+					end)
 						ob.MouseButton1Click:Connect(function()
 							current = opt
 							label.Text = tostring(opt)
@@ -2040,7 +2224,7 @@ function SableLib:CreateWindow(opts)
 					local absSize = bar.AbsoluteSize
 					local p = math.clamp((x - absPos.X) / absSize.X, 0, 1)
 					val = math.floor(min + (max - min) * p)
-					fill.Size = UDim2.new(p, 0, 1, 0)
+					tw(fill, 0.08, { Size = UDim2.new(p, 0, 1, 0) })
 					valLabel.Text = tostring(val)
 					if sOpts.Callback then
 						pcall(sOpts.Callback, val)
@@ -2049,12 +2233,14 @@ function SableLib:CreateWindow(opts)
 				bar.InputBegan:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
 						dragging = true
+						glowStroke(bar).Transparency = 0.5
 						setFromX(input.Position.X)
 					end
 				end)
 				UserInputService.InputEnded:Connect(function(input)
 					if input.UserInputType == Enum.UserInputType.MouseButton1 then
 						dragging = false
+						glowStroke(bar).Transparency = 1
 					end
 				end)
 				UserInputService.InputChanged:Connect(function(input)
@@ -2172,6 +2358,7 @@ function SableLib:CreateWindow(opts)
 				local function dragKnob(knob, isLo)
 					knob.InputBegan:Connect(function(input)
 						if input.UserInputType ~= Enum.UserInputType.MouseButton1 and input.UserInputType ~= Enum.UserInputType.Touch then return end
+						glowStroke(knob).Transparency = 0.5
 						local moveConn
 						moveConn = UserInputService.InputChanged:Connect(function(m)
 							if m.UserInputType ~= Enum.UserInputType.MouseMovement and m.UserInputType ~= Enum.UserInputType.Touch then return end
@@ -2185,6 +2372,7 @@ function SableLib:CreateWindow(opts)
 							if e.UserInputType == Enum.UserInputType.MouseButton1 or e.UserInputType == Enum.UserInputType.Touch then
 								pcall(function() moveConn:Disconnect() end)
 								pcall(function() endConn:Disconnect() end)
+								glowStroke(knob).Transparency = 1
 								render(true)
 							end
 						end)
@@ -2342,7 +2530,13 @@ function SableLib:CreateWindow(opts)
 				stroke(box, COLORS.RowStroke, 1, 0.2)
 				glossBg(box)
 				padding(box, 10, 0, 10, 0)
+				box.Focused:Connect(function()
+					tw(box, Motion.HoverDuration, { BackgroundColor3 = COLORS.RowBG })
+					glowStroke(box).Transparency = 0.6
+				end)
 				box.FocusLost:Connect(function(enter)
+					tw(box, Motion.HoverDuration, { BackgroundColor3 = COLORS.Dark })
+					glowStroke(box).Transparency = 1
 					if enter and iOpts.Callback then
 						pcall(iOpts.Callback, box.Text)
 					end
@@ -2397,10 +2591,12 @@ function SableLib:CreateWindow(opts)
 				corner(btn, 8)
 				stroke(btn, COLORS.RowStroke, 1, 0.2)
 				glossBg(btn)
+				pressify(btn)
 				local listening = false
 				btn.MouseButton1Click:Connect(function()
 					listening = true
 					btn.Text = "..."
+					glowStroke(btn).Transparency = 0.5
 				end)
 				-- Executor-sicher: InputBegan feuert auch im Executor für Keyboard.
 				-- Beim Binden (listening) wird gpe ignoriert, damit jede Taste übernommen wird.
@@ -2408,6 +2604,7 @@ function SableLib:CreateWindow(opts)
 					if listening then
 						if input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode ~= Enum.KeyCode.Unknown then
 							listening = false
+							glowStroke(btn).Transparency = 1
 							current = input.KeyCode
 							btn.Text = keyName(current)
 							if kOpts.Callback then
@@ -2463,6 +2660,7 @@ function SableLib:CreateWindow(opts)
 					AutoButtonColor = false,
 				})
 				corner(preview, 8)
+				pressify(preview)
 				stroke(preview, COLORS.RowStroke, 1, 0.1)
 
 				local open = false
@@ -2484,9 +2682,19 @@ function SableLib:CreateWindow(opts)
 				local open = false
 				local pop = nil
 				local backdrop = nil
-				local function closePop()
+				local function closePop(instant)
 					open = false
-					if pop then pop:Destroy() pop = nil end
+					if pop then
+						local pf = pop
+						pop = nil
+						if instant then
+							pcall(function() pf:Destroy() end)
+						else
+							local sc = ensureScale(pf)
+							tw(sc, 0.12, { Scale = 0.97 })
+							task.delay(0.1, function() pcall(function() pf:Destroy() end) end)
+						end
+					end
 					if backdrop then backdrop:Destroy() backdrop = nil end
 				end
 				table.insert(win._popups, closePop)
@@ -2523,6 +2731,9 @@ function SableLib:CreateWindow(opts)
 						ZIndex = 60,
 					})
 					corner(pop, 16)
+				local popScale = ensureScale(pop)
+				popScale.Scale = 0.96
+				tw(popScale, Motion.OpenDuration, { Scale = 1 })
 					stroke(pop, COLORS.RowStroke, 1, 0.1)
 
 					create("TextLabel", {
@@ -2939,6 +3150,18 @@ function SableLib:CreateWindow(opts)
 	gridScroll:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
 		if Window._view == "grid" then updateGridColumns(Window) end
 	end)
+	-- Window-Open: Scale + Slide + Shadow-Fade
+	local openScale = ensureScale(container)
+	openScale.Scale = 0.96
+	container.Position = UDim2.new(0.5, 0, 0.5, 10)
+	shadow.BackgroundTransparency = 1
+	tw(openScale, Motion.OpenDuration, { Scale = 1 })
+	tw(container, Motion.OpenDuration, { Position = UDim2.new(0.5, 0, 0.5, 0) })
+	tw(shadow, Motion.OpenDuration, { BackgroundTransparency = 0.75 })
+	sideScroll:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+		positionIndicator(Window)
+	end)
+	task.delay(0.25, function() pcall(positionIndicator, Window) end)
 	applyView(Window, false)
 	return Window
 end
