@@ -671,13 +671,15 @@ function SableLib:CreateWindow(opts)
 		Size = UDim2.new(1, 0, 0, 52),
 		BackgroundTransparency = 1,
 	})
+	-- Custom-Assets (rbxassetid / Asset-ID) in Originalfarben, Lucide in Akzent
+	local logoIsCustom = opts.Icon and (string.find(opts.Icon, "rbxassetid", 1, true) or string.match(opts.Icon, "^%s*%d+%s*$")) and true or false
 	local logoIcon = create("ImageLabel", {
 		Parent = logoRow,
 		Size = UDim2.fromOffset(24, 24),
 		Position = UDim2.new(0, 2, 0, 4),
 		BackgroundTransparency = 1,
 		Image = SableLib:ResolveIcon(opts.Icon or "crown") or "",
-		ImageColor3 = COLORS.Beige,
+		ImageColor3 = logoIsCustom and Color3.fromRGB(255, 255, 255) or COLORS.Beige,
 	})
 	create("TextLabel", {
 		Parent = logoRow,
@@ -880,6 +882,8 @@ function SableLib:CreateWindow(opts)
 		local img = SableLib:ResolveIcon(iconName or "headphones")
 		if img and self._logoIcon then
 			self._logoIcon.Image = img
+			local custom = iconName and (string.find(iconName, "rbxassetid", 1, true) or string.match(iconName, "^%s*%d+%s*$"))
+			self._logoIcon.ImageColor3 = (custom and Color3.fromRGB(255, 255, 255)) or COLORS.Beige
 		end
 	end
 	Window._popups = {}

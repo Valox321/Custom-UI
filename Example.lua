@@ -1,6 +1,6 @@
 --// sable example: Referenz-Screenshot 1:1 (SableLib 1.14-shot)
 --// Tabs = Sidebar (MODULES / GENERAL), Pages = Sections im Content
-local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua"))()
+local Sable = loadstring(game:HttpGet("https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/SableLib.lua?x=" .. tick()))()
 print("[sable] lib version:", Sable.Version or "?")
 
 local Window = Sable:CreateWindow({
