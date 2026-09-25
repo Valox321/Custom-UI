@@ -2,9 +2,9 @@
 --// Je ein Tab pro Control-Typ in der Section "ELEMENTS"
 --// WICHTIG: immer DIESE Datei ausfuehren (Repo-Stand), keine alte Kopie!
 --// Lib-URL ist auf den Commit gepinnt (immer exakt diese Version, kein CDN-Lag)
-local URL = "https://cdn.jsdelivr.net/gh/Valox321/Custom-UI@e0927c72f2a99c10142221ca6a72c3c9d51d6f26/SableLib.lua"
+local URL = "https://cdn.jsdelivr.net/gh/Valox321/Custom-UI@96914a4f2ac0918d94ab1a7366b0c77a332c05a2/SableLib.lua"
 local src = game:HttpGet(URL, true)
-print("[sable] bytes:", #src, "| 1.21 drin:", src:find('Version = "1.21"', 1, true) ~= nil)
+print("[sable] bytes:", #src, "| 1.22 drin:", src:find('Version = "1.22"', 1, true) ~= nil)
 local Sable = loadstring(src)()
 print("[sable] lib version:", Sable.Version or "?")
 
