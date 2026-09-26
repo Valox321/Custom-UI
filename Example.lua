@@ -14,9 +14,7 @@ local Combat = Window:AddTab({
 	Count = 3,
 })
 
-local Targeting = Combat:AddSection("Targeting")
-
-Targeting:AddToggle("Aim Assist", {
+Combat:AddToggle("Aim Assist", {
 	Description = "Example toggle with an enabled-state callback",
 	Default = false,
 	Callback = function(enabled)
@@ -24,7 +22,7 @@ Targeting:AddToggle("Aim Assist", {
 	end,
 })
 
-Targeting:AddToggle("Target Friends", {
+Combat:AddToggle("Target Friends", {
 	Description = "Include friends in the target filter",
 	Default = true,
 	Callback = function(enabled)
@@ -32,9 +30,7 @@ Targeting:AddToggle("Target Friends", {
 	end,
 })
 
-local Actions = Combat:AddSection("Actions")
-
-Actions:AddButton({
+Combat:AddButton({
 	Name = "Clear Targets",
 	Description = "Example action button",
 	ButtonText = "Clear",
@@ -49,9 +45,7 @@ local Settings = Window:AddTab({
 	Count = 1,
 })
 
-local Interface = Settings:AddSection("Interface")
-
-Interface:AddToggle("Show Notifications", {
+Settings:AddToggle("Show Notifications", {
 	Description = "Enable or disable UI notifications",
 	Default = true,
 	Callback = function(enabled)

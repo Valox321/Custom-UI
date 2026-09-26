@@ -133,7 +133,7 @@ end
 
 function PrestigeUI:_renderModules()
 	for _, child in ipairs(self.List:GetChildren()) do
-		if child:IsA("Frame") then
+		if child.Name == "ModuleCard" or child.Name == "SectionHeading" then
 			child:Destroy()
 		end
 	end
@@ -341,6 +341,9 @@ function PrestigeUI:AddTab(name, options)
 		end
 	end)
 
+	if not self.SelectedTab then
+		self:SelectTab(tab)
+	end
 	return tab
 end
 
@@ -382,6 +385,35 @@ end
 
 function TabMethods:AddGroupbox(options)
 	return self:AddSection(options)
+end
+
+function TabMethods:AddToggle(name, options)
+	options = options or {}
+	local item = self.Library:AddModule(
+		self,
+		name,
+		options.Description or "",
+		options.Callback
+	)
+	item.Enabled = options.Default == true
+	if self.Library.SelectedTab == self then
+		self.Library:_renderModules()
+	end
+	return item
+end
+
+function TabMethods:AddButton(options)
+	assert(type(options) == "table", "AddButton expects an options table")
+	return self.Library:AddModule(
+		self,
+		options.Name or options.Title,
+		options.Description or "",
+		options.Callback,
+		{
+			Kind = "button",
+			ButtonText = options.ButtonText or options.Text,
+		}
+	)
 end
 
 function SectionMethods:AddToggle(name, options)
