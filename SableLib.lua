@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.47"
+SableLib.Version = "1.48"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -1758,9 +1758,7 @@ function SableLib:CreateWindow(opts)
 			closeAllPopups(win)
 			win._switchTok = (win._switchTok or 0) + 1
 			local stok = win._switchTok
-			local home = win._cardHome or card.Position
 			fadeRowsOut(win)
-			tw(card, 0.09, { Position = UDim2.new(home.X.Scale, home.X.Offset - 8, home.Y.Scale, home.Y.Offset) })
 			task.delay(0.1, function()
 			if win._switchTok ~= stok then return end
 			if not fromBack and win._currentTab and win._currentTab ~= target then
@@ -1789,8 +1787,6 @@ function SableLib:CreateWindow(opts)
 				if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
 			end
 			positionIndicator(win)
-			card.Position = UDim2.new(home.X.Scale, home.X.Offset + 8, home.Y.Scale, home.Y.Offset)
-			tw(card, 0.18, { Position = UDim2.new(home.X.Scale, home.X.Offset, home.Y.Scale, home.Y.Offset) })
 			animateCards(win)
 			end)
 		end
@@ -1820,9 +1816,7 @@ function SableLib:CreateWindow(opts)
 				closeAllPopups(win)
 				win._switchTok = (win._switchTok or 0) + 1
 				local stok = win._switchTok
-				local home = win._cardHome or card.Position
 				fadeRowsOut(win)
-				tw(card, 0.09, { Position = UDim2.new(home.X.Scale, home.X.Offset - 8, home.Y.Scale, home.Y.Offset) })
 				task.delay(0.1, function()
 				if win._switchTok ~= stok then return end
 				if not fromBack and win._currentPage and win._currentPage ~= Page then
@@ -1843,8 +1837,6 @@ function SableLib:CreateWindow(opts)
 					if t2._nameLbl then t2._nameLbl.Position = UDim2.new(0, 40, 0, 0) end
 				end
 				positionIndicator(win)
-				card.Position = UDim2.new(home.X.Scale, home.X.Offset + 8, home.Y.Scale, home.Y.Offset)
-				tw(card, 0.18, { Position = UDim2.new(home.X.Scale, home.X.Offset, home.Y.Scale, home.Y.Offset) })
 				animateCards(win)
 				end)
 			end
