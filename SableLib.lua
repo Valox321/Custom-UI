@@ -12,7 +12,7 @@
 --//   + Type = "toggle" (Default, Switch) oder Type = "checkbox" (Kasten mit Haken)
 
 local SableLib = {}
-SableLib.Version = "1.46"
+SableLib.Version = "1.47"
 
 local Players = game:GetService("Players")
 local TweenService = game:GetService("TweenService")
@@ -803,7 +803,7 @@ function SableLib:CreateWindow(opts)
 		Parent = gui,
 		Size = UDim2.new(1, 0, 1, 0),
 		BackgroundColor3 = Color3.fromRGB(0, 0, 0),
-		BackgroundTransparency = 0.92,
+		BackgroundTransparency = 0.65,
 		BorderSizePixel = 0,
 	})
 	local container = create("Frame", {
@@ -815,6 +815,29 @@ function SableLib:CreateWindow(opts)
 		BackgroundTransparency = 1,
 		BorderSizePixel = 0,
 	})
+	-- Bloom-Halo ums Fenster (wie Referenz): liegt UNTER allem, wandert im Container mit
+	local haloOuter = create("Frame", {
+		Name = "HaloOuter",
+		Parent = container,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, 28, 1, 28),
+		BackgroundColor3 = Color3.fromRGB(80, 60, 210),
+		BackgroundTransparency = 0.93,
+		BorderSizePixel = 0,
+	})
+	corner(haloOuter, 26)
+	local haloInner = create("Frame", {
+		Name = "HaloInner",
+		Parent = container,
+		AnchorPoint = Vector2.new(0.5, 0.5),
+		Position = UDim2.new(0.5, 0, 0.5, 0),
+		Size = UDim2.new(1, 14, 1, 14),
+		BackgroundColor3 = Color3.fromRGB(117, 101, 242),
+		BackgroundTransparency = 0.88,
+		BorderSizePixel = 0,
+	})
+	corner(haloInner, 21)
 	local shadow = create("Frame", {
 		Name = "Shadow",
 		Parent = container,
