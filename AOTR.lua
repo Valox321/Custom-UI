@@ -100,6 +100,16 @@ local FarmFeatures = {
     waitBeforeFarming = 5,
     missionSafetyTimer = 120,
     raidSafetyTimer = 300,
+    autoFailsafeEnabled = false,
+    autoDieAtStreakEnabled = false,
+    dieAtStreakCount = 1000,
+    multiHitEnabled = false,
+    multiHitAmount = 3,
+    multiHitRadius = 250,
+    bossBurst = 5,
+    bossHitboxRotation = 0,
+    failsafeStartAt = nil,
+    streakLastDeathAt = 0,
     statusLabel = nil,
     currentStatus = "Idle",
     lastAttackTime = 0,
@@ -481,9 +491,7 @@ function CombatFeatures.getNearestEscapeNape()
     local nearestNape
     local nearestDistance = math.huge
     for _, titan in ipairs(titans:GetChildren()) do
-        local humanoid = titan:IsA("Model") and titan:FindFirstChildOfClass("Humanoid")
-        local state = titan:GetAttribute("State")
-        if humanoid and state ~= nil and state ~= "Roar" and state ~= "HeatWave" then
+        if CombatFeatures.isTitanAttackable(titan) then
             local hitboxes = titan:FindFirstChild("Hitboxes")
             local hit = hitboxes and hitboxes:FindFirstChild("Hit")
             local nape = hit and hit:FindFirstChild("Nape")
@@ -491,7 +499,9 @@ function CombatFeatures.getNearestEscapeNape()
                 local hitFolder = titan:FindFirstChild("Hit", true)
                 nape = hitFolder and hitFolder:FindFirstChild("Nape")
             end
-            if nape and nape:IsA("BasePart") then
+            local fake = titan:FindFirstChild("Fake")
+            local collision = fake and fake:FindFirstChild("Collision")
+            if nape and nape:IsA("BasePart") and not (collision and not collision.CanCollide) then
                 local distance = (rootPart.Position - nape.Position).Magnitude
                 if distance < nearestDistance then
                     nearestDistance = distance
@@ -523,6 +533,128 @@ function CombatFeatures.getAstraFarmTargets()
         end
     end
     return targets
+end
+
+function CombatFeatures.getTitanFromNape(nape)
+    local titan = nape
+    local titans = workspace:FindFirstChild("Titans")
+    while titan and titan.Parent and titan.Parent ~= titans do
+        titan = titan.Parent
+    end
+    return titan and titan.Parent == titans and titan or nil
+end
+
+function CombatFeatures.isTitanAttackable(titan)
+    if not titan or not titan:IsA("Model") or titan:GetAttribute("Killed")
+        or titan:GetAttribute("Dead") == true then
+        return false
+    end
+    local humanoid = titan:FindFirstChildOfClass("Humanoid")
+    local state = titan:GetAttribute("State")
+    return humanoid ~= nil and humanoid.Health > 0
+        and state ~= nil and state ~= "Roar" and state ~= "HeatWave"
+end
+
+function CombatFeatures.pickBossHitbox(hitFolder, hitboxIndex)
+    local hitboxes = {}
+    for _, child in ipairs(hitFolder:GetChildren()) do
+        if child:IsA("BasePart") and child.Name ~= "Nape" then
+            table.insert(hitboxes, child)
+        end
+    end
+    if #hitboxes == 0 then
+        return hitFolder:FindFirstChild("Nape")
+    end
+    if hitboxIndex < 5 then
+        return hitboxes[hitboxIndex % #hitboxes + 1]
+    end
+    local offset = hitboxIndex % 10
+    if offset < 5 then
+        return hitboxes[offset % #hitboxes + 1]
+    end
+    return hitFolder:FindFirstChild("Nape")
+end
+
+function CombatFeatures.attackFarmTarget(nape, rootPart)
+    local titan = CombatFeatures.getTitanFromNape(nape)
+    if not CombatFeatures.isTitanAttackable(titan) then
+        return false
+    end
+
+    local titans = workspace:FindFirstChild("Titans")
+    if not titans then
+        return false
+    end
+    local objective = workspace:GetAttribute("Objective")
+    local isRaidBoss = objective ~= "Stall"
+        and titan.Name:match("^%x+%-%x+%-%x+%-%x+%-%x+$") ~= nil
+    CombatFeatures.sendPost("Attacks", "Slash", true)
+
+    if isRaidBoss then
+        local hitboxes = titan:FindFirstChild("Hitboxes")
+        local hitFolder = hitboxes and hitboxes:FindFirstChild("Hit")
+        local hitbox = hitFolder and CombatFeatures.pickBossHitbox(hitFolder, FarmFeatures.bossHitboxRotation)
+        if hitbox then
+            local burstCount = math.clamp(math.floor(tonumber(FarmFeatures.bossBurst) or 5), 1, 5)
+            for _ = 1, burstCount do
+                CombatFeatures.sendPost(
+                    "Hitboxes", "Register", hitbox,
+                    math.random(200, 400),
+                    math.random(100, 800) / 1000
+                )
+            end
+            FarmFeatures.bossHitboxRotation += 1
+        end
+    else
+        local targets = { { Titan = titan, Nape = nape } }
+        local weapon = LocalPlayer:GetAttribute("Weapon")
+        local multiHitCount = objective ~= "Stall" and weapon ~= "Spears" and FarmFeatures.multiHitEnabled
+            and math.clamp(math.floor(tonumber(FarmFeatures.multiHitAmount) or 3), 1, 10)
+            or 1
+        local extraTargets = {}
+        if multiHitCount > 1 then
+            for _, candidate in ipairs(titans:GetChildren()) do
+                if candidate ~= titan and CombatFeatures.isTitanAttackable(candidate) then
+                    local candidateHitboxes = candidate:FindFirstChild("Hitboxes")
+                    local candidateHit = candidateHitboxes and candidateHitboxes:FindFirstChild("Hit")
+                    local candidateNape = candidateHit and candidateHit:FindFirstChild("Nape")
+                    local fake = candidate:FindFirstChild("Fake")
+                    local collision = fake and fake:FindFirstChild("Collision")
+                    if candidateNape and candidateNape:IsA("BasePart")
+                        and not (collision and not collision.CanCollide)
+                        and (candidateNape.Position - nape.Position).Magnitude <= FarmFeatures.multiHitRadius then
+                        table.insert(extraTargets, {
+                            Titan = candidate,
+                            Nape = candidateNape,
+                            Distance = (rootPart.Position - candidateNape.Position).Magnitude,
+                        })
+                    end
+                end
+            end
+            table.sort(extraTargets, function(left, right)
+                return left.Distance < right.Distance
+            end)
+            for _, candidate in ipairs(extraTargets) do
+                if #targets >= multiHitCount then
+                    break
+                end
+                table.insert(targets, candidate)
+            end
+        end
+
+        for _, target in ipairs(targets) do
+            if target.Nape.Parent and CombatFeatures.isTitanAttackable(target.Titan) then
+                CombatFeatures.sendPost(
+                    "Hitboxes", "Register", target.Nape,
+                    math.random(200, 400),
+                    math.random(100, 800) / 1000
+                )
+            end
+        end
+    end
+
+    CombatFeatures.sendPost("Attacks", "Slash", false)
+    return true
 end
 
 function CombatFeatures.getEscapeButtonsFolder()
@@ -1230,6 +1362,55 @@ function FarmFeatures.stopNoclip()
     end
 end
 
+function FarmFeatures.startSafetyWatch(runId)
+    task.spawn(function()
+        local failsafeTriggered = false
+        while FarmFeatures.isActive(runId) do
+            task.wait(0.5)
+            if not FarmFeatures.isActive(runId) then
+                break
+            end
+
+            if FarmFeatures.autoDieAtStreakEnabled and CombatFeatures.isCombatSession() then
+                local streak = tonumber(LocalPlayer:GetAttribute("Streak")) or 0
+                local threshold = math.max(1, math.floor(tonumber(FarmFeatures.dieAtStreakCount) or 1000))
+                local character = LocalPlayer.Character
+                local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+                if streak >= threshold and humanoid and humanoid.Health > 0
+                    and tick() - FarmFeatures.streakLastDeathAt >= 3 then
+                    FarmFeatures.streakLastDeathAt = tick()
+                    pcall(function()
+                        humanoid.Health = 0
+                    end)
+                end
+            end
+
+            if not FarmFeatures.autoFailsafeEnabled then
+                FarmFeatures.failsafeStartAt = nil
+                failsafeTriggered = false
+            elseif CombatFeatures.isCombatSession() then
+                FarmFeatures.failsafeStartAt = FarmFeatures.failsafeStartAt or os.clock()
+                if not failsafeTriggered and os.clock() - FarmFeatures.failsafeStartAt >= 900 then
+                    failsafeTriggered = true
+                    FarmFeatures.stop()
+                    if autoFarmToggle then
+                        autoFarmToggle.Value = false
+                    end
+                    FarmFeatures.setStatus("Auto Failsafe: returning to Lobby...")
+                    task.spawn(function()
+                        invokeActorFunction("Functions", "Teleport", "Lobby")
+                        task.wait(0.5)
+                        pcall(function()
+                            Services.TeleportService:Teleport(14916516914, LocalPlayer)
+                        end)
+                    end)
+                    break
+                end
+            end
+        end
+    end)
+end
+
 function FarmFeatures.shouldHoldForSafetyTimer()
     local mode = workspace:GetAttribute("Type")
     local minimumTime = mode == "Missions" and FarmFeatures.missionSafetyTimer
@@ -1347,6 +1528,7 @@ end
 function FarmFeatures.stop()
     FarmFeatures.enabled = false
     FarmFeatures.runId += 1
+    FarmFeatures.failsafeStartAt = nil
     if FarmFeatures.movementConnection then
         FarmFeatures.movementConnection:Disconnect()
         FarmFeatures.movementConnection = nil
@@ -1368,6 +1550,8 @@ function FarmFeatures.start()
     FarmFeatures.soloOnlyCheckedForSession = false
     FarmFeatures.setStatus("Waiting before farming...")
     SoloOnly.start()
+    FarmFeatures.failsafeStartAt = nil
+    FarmFeatures.startSafetyWatch(runId)
 
     if FarmFeatures.movementConnection then
         FarmFeatures.movementConnection:Disconnect()
@@ -1493,28 +1677,12 @@ function FarmFeatures.start()
                 continue
             end
 
-            local titan = nape.Parent and nape.Parent.Parent and nape.Parent.Parent.Parent
-            local titanState = titan and titan:GetAttribute("State")
-            local attackable = titan
-                and not titan:GetAttribute("Killed")
-                and titan:GetAttribute("Dead") ~= true
-                and titanState ~= nil
-                and titanState ~= "Roar"
-                and titanState ~= "HeatWave"
             local attackRange = (tonumber(FarmFeatures.hoverHeight) or 200) + 50
-            if attackable
+            if CombatFeatures.isTitanAttackable(CombatFeatures.getTitanFromNape(nape))
                 and (rootPart.Position - nape.Position).Magnitude <= attackRange
                 and tick() - FarmFeatures.lastAttackTime >= 0.5 then
                 FarmFeatures.lastAttackTime = tick()
-                CombatFeatures.sendPost("Attacks", "Slash", true)
-                CombatFeatures.sendPost(
-                    "Hitboxes",
-                    "Register",
-                    nape,
-                    math.random(200, 400),
-                    math.random(100, 800) / 1000
-                )
-                CombatFeatures.sendPost("Attacks", "Slash", false)
+                CombatFeatures.attackFarmTarget(nape, rootPart)
             end
 
             local mode = workspace:GetAttribute("Type") or "Combat"
@@ -1573,24 +1741,49 @@ local function clickAutoRetryButton(runId)
         current = current and current:FindFirstChild(childName)
     end
     local retryButton = current
-    if not retryButton or not retryButton:IsA("GuiButton") then
+    if not retryButton or not retryButton:IsA("GuiButton")
+        or not retryButton.Visible or not retryButton.Active or not retryButton.Selectable then
         return false
     end
     if not AutoRetry.enabled or AutoRetry.runId ~= runId or not FarmFeatures.enabled then
         return false
     end
 
-    Services.GuiService.SelectedObject = retryButton
-    task.wait(0.1)
-    if not AutoRetry.enabled or AutoRetry.runId ~= runId or not retryButton.Parent then
-        Services.GuiService.SelectedObject = nil
-        return false
+    for attempt = 1, 3 do
+        if not AutoRetry.enabled or AutoRetry.runId ~= runId or not FarmFeatures.enabled then
+            Services.GuiService.SelectedObject = nil
+            return false
+        end
+        if not retryButton.Parent or not retryButton.Visible or not retryButton.Active then
+            Services.GuiService.SelectedObject = nil
+            return false
+        end
+
+        Services.GuiService.SelectedObject = retryButton
+        task.wait(0.2)
+        if Services.GuiService.SelectedObject ~= retryButton then
+            Services.GuiService.SelectedObject = nil
+            task.wait(0.2)
+            continue
+        end
+
+        local pressed = pcall(function()
+            Services.VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        end)
+        task.wait(0.12)
+        local released = pcall(function()
+            Services.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+        end)
+        if pressed and released then
+            task.wait(0.6)
+            Services.GuiService.SelectedObject = nil
+            return true
+        end
+        task.wait(0.2)
     end
-    Services.VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-    task.wait(0.1)
-    Services.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+
     Services.GuiService.SelectedObject = nil
-    return true
+    return false
 end
 
 local function clickRetrySure(runId)
@@ -2778,6 +2971,74 @@ do
 end
 
 do
+    local multiHitForm = Farming:PageSection({
+        Title = "Multi-Hit Settings (Use it as Safe as Possible)",
+        Subtitle = "Hit nearby Titans or burst hits on raid bosses.",
+    }):Form()
+
+    local multiHitRow = multiHitForm:Row({ SearchIndex = "Multi Hit" })
+    multiHitRow:Left():TitleStack({
+        Title = "Multi Hit",
+        Subtitle = "Hit multiple Titans per swing.",
+    })
+    multiHitRow:Right():Toggle({
+        Value = FarmFeatures.multiHitEnabled,
+        ValueChanged = function(_, value)
+            FarmFeatures.multiHitEnabled = value
+        end,
+    })
+
+    local multiHitAmountRow = multiHitForm:Row({ SearchIndex = "Multi Hit Amount" })
+    local multiHitAmountTitle = multiHitAmountRow:Left():TitleStack({
+        Title = "Multi Hit Amount",
+        Subtitle = string.format("Titans hit per swing: %d (1 = single).", FarmFeatures.multiHitAmount),
+    })
+    multiHitAmountRow:Right():Slider({
+        Minimum = 1,
+        Maximum = 10,
+        Value = FarmFeatures.multiHitAmount,
+        ValueChanged = function(_, value)
+            FarmFeatures.multiHitAmount = math.clamp(math.floor(value + 0.5), 1, 10)
+            multiHitAmountTitle.Subtitle = string.format(
+                "Titans hit per swing: %d (1 = single).", FarmFeatures.multiHitAmount
+            )
+        end,
+    })
+
+    local multiHitRadiusRow = multiHitForm:Row({ SearchIndex = "Multi Hit Radius" })
+    local multiHitRadiusTitle = multiHitRadiusRow:Left():TitleStack({
+        Title = "Multi Hit Radius",
+        Subtitle = string.format("Maximum distance between Titans: %d studs.", FarmFeatures.multiHitRadius),
+    })
+    multiHitRadiusRow:Right():Slider({
+        Minimum = 50,
+        Maximum = 1000,
+        Value = FarmFeatures.multiHitRadius,
+        ValueChanged = function(_, value)
+            FarmFeatures.multiHitRadius = math.clamp(math.floor((value + 12.5) / 25) * 25, 50, 1000)
+            multiHitRadiusTitle.Subtitle = string.format(
+                "Maximum distance between Titans: %d studs.", FarmFeatures.multiHitRadius
+            )
+        end,
+    })
+
+    local bossBurstRow = multiHitForm:Row({ SearchIndex = "Boss Burst" })
+    local bossBurstTitle = bossBurstRow:Left():TitleStack({
+        Title = "Boss Burst",
+        Subtitle = string.format("Hits per raid boss swing: %d.", FarmFeatures.bossBurst),
+    })
+    bossBurstRow:Right():Slider({
+        Minimum = 1,
+        Maximum = 5,
+        Value = FarmFeatures.bossBurst,
+        ValueChanged = function(_, value)
+            FarmFeatures.bossBurst = math.clamp(math.floor(value + 0.5), 1, 5)
+            bossBurstTitle.Subtitle = string.format("Hits per raid boss swing: %d.", FarmFeatures.bossBurst)
+        end,
+    })
+end
+
+do
     local miscellaneousForm = Farming:PageSection({
         Title = "Miscellaneous",
         Subtitle = "Visual and weak-point helpers for combat sessions.",
@@ -2899,6 +3160,54 @@ do
         ValueChanged = function(_, value)
             FarmFeatures.raidSafetyTimer = value
             raidTimerTitle.Subtitle = string.format("Minimum raid time: %ds.", math.floor(value + 0.5))
+        end,
+    })
+
+    local autoFailsafeRow = safetyForm:Row({ SearchIndex = "Auto Failsafe" })
+    autoFailsafeRow:Left():TitleStack({
+        Title = "Auto Failsafe (15 min)",
+        Subtitle = "Return to the Lobby if Auto Farm has run for 15 minutes.",
+    })
+    autoFailsafeRow:Right():Toggle({
+        Value = FarmFeatures.autoFailsafeEnabled,
+        ValueChanged = function(_, value)
+            FarmFeatures.autoFailsafeEnabled = value
+            FarmFeatures.failsafeStartAt = nil
+        end,
+    })
+
+    local streakForm = Settings:PageSection({
+        Title = "Auto Die at Streak x",
+        Subtitle = "Automatically end the run when your kill streak reaches the threshold.",
+    }):Form()
+
+    local autoDieStreakRow = streakForm:Row({ SearchIndex = "Auto Die at Streak" })
+    autoDieStreakRow:Left():TitleStack({
+        Title = "Auto Die at Streak",
+        Subtitle = "Kill yourself when the kill streak reaches the threshold.",
+    })
+    autoDieStreakRow:Right():Toggle({
+        Value = FarmFeatures.autoDieAtStreakEnabled,
+        ValueChanged = function(_, value)
+            FarmFeatures.autoDieAtStreakEnabled = value
+        end,
+    })
+
+    local dieAtStreakRow = streakForm:Row({ SearchIndex = "Die at Streak" })
+    local dieAtStreakTitle = dieAtStreakRow:Left():TitleStack({
+        Title = "Die at Streak",
+        Subtitle = string.format("Kill streak threshold to trigger auto die: %d.", FarmFeatures.dieAtStreakCount),
+    })
+    dieAtStreakRow:Right():Slider({
+        Minimum = 1,
+        Maximum = 10000,
+        Value = FarmFeatures.dieAtStreakCount,
+        ValueChanged = function(_, value)
+            FarmFeatures.dieAtStreakCount = math.max(1, math.floor(value + 0.5))
+            dieAtStreakTitle.Subtitle = string.format(
+                "Kill streak threshold to trigger auto die: %d.",
+                FarmFeatures.dieAtStreakCount
+            )
         end,
     })
 
