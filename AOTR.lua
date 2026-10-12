@@ -55,6 +55,41 @@ local selectedGearWeapon = "Blades"
 local autoUpgradeGearEnabled = false
 local autoUpgradeGearRunId = 0
 local autoUpgradeGearToggle
+local autoFarmToggle
+local autoLobbyRewardConnection
+local SoloOnly = {
+    enabled = false,
+    playerAddedConnection = nil,
+    checkedForSession = false,
+}
+local VisualFeatures = {
+    removeFogEnabled = true,
+    fogDensity = 0.15,
+    atmosphere = nil,
+    originalDensity = nil,
+    originalDensities = setmetatable({}, { __mode = "k" }),
+    densityConnection = nil,
+    lightingConnection = nil,
+    reapplyingFog = false,
+    napeExtenderEnabled = false,
+    napeOriginals = setmetatable({}, { __mode = "k" }),
+    napeFolder = nil,
+    napeChildAddedConnection = nil,
+    napeWorkspaceConnection = nil,
+    titanEspEnabled = false,
+    titanEspFolder = nil,
+    titanHighlights = {},
+    titanChildAddedConnection = nil,
+    titanChildRemovedConnection = nil,
+    titanWorkspaceConnection = nil,
+}
+local AutoLobby = {
+    enabled = false,
+    after = 10,
+    completedSessions = 0,
+    returning = false,
+    titleStack = nil,
+}
 local FarmFeatures = {
     enabled = false,
     runId = 0,
@@ -69,6 +104,12 @@ local FarmFeatures = {
     lastAttackTime = 0,
     lastSessionSeconds = nil,
     lastSessionSecondsChangedAt = 0,
+    soloOnlyCheckedForSession = false,
+    movementConnection = nil,
+    movementBodyPosition = nil,
+    movementTarget = nil,
+    movementNape = nil,
+    movementHumanoid = nil,
 }
 local CombatFeatures = {
     autoGrabEscapeEnabled = true,
@@ -528,6 +569,285 @@ function CombatFeatures.isCombatSession()
     return game.PlaceId ~= 14916516914 and workspace:FindFirstChild("Titans") ~= nil
 end
 
+function VisualFeatures.attachAtmosphere(atmosphere)
+    if VisualFeatures.atmosphere == atmosphere then
+        return
+    end
+
+    local previousAtmosphere = VisualFeatures.atmosphere
+    if previousAtmosphere and previousAtmosphere.Parent then
+        local previousDensity = VisualFeatures.originalDensities[previousAtmosphere]
+        if previousDensity ~= nil then
+            pcall(function()
+                previousAtmosphere.Density = previousDensity
+            end)
+        end
+    end
+
+    if VisualFeatures.densityConnection then
+        VisualFeatures.densityConnection:Disconnect()
+        VisualFeatures.densityConnection = nil
+    end
+
+    VisualFeatures.atmosphere = atmosphere
+    if VisualFeatures.originalDensities[atmosphere] == nil then
+        VisualFeatures.originalDensities[atmosphere] = atmosphere.Density
+    end
+    VisualFeatures.originalDensity = VisualFeatures.originalDensities[atmosphere]
+
+    local function applyFogReduction()
+        if VisualFeatures.removeFogEnabled and atmosphere.Parent and atmosphere.Density > VisualFeatures.fogDensity then
+            atmosphere.Density = VisualFeatures.fogDensity
+        end
+    end
+
+    applyFogReduction()
+    VisualFeatures.densityConnection = atmosphere:GetPropertyChangedSignal("Density"):Connect(function()
+        if not VisualFeatures.removeFogEnabled or VisualFeatures.reapplyingFog then
+            return
+        end
+
+        VisualFeatures.reapplyingFog = true
+        task.delay(0.5, function()
+            VisualFeatures.reapplyingFog = false
+            pcall(applyFogReduction)
+        end)
+    end)
+end
+
+function VisualFeatures.setFog(enabled)
+    VisualFeatures.removeFogEnabled = enabled
+    if enabled then
+        local atmosphere = Services.Lighting:FindFirstChildOfClass("Atmosphere")
+        if atmosphere then
+            VisualFeatures.attachAtmosphere(atmosphere)
+        end
+
+        if not VisualFeatures.lightingConnection then
+            VisualFeatures.lightingConnection = Services.Lighting.ChildAdded:Connect(function(child)
+                if VisualFeatures.removeFogEnabled and child:IsA("Atmosphere") then
+                    VisualFeatures.attachAtmosphere(child)
+                end
+            end)
+        end
+        return
+    end
+
+    if VisualFeatures.lightingConnection then
+        VisualFeatures.lightingConnection:Disconnect()
+        VisualFeatures.lightingConnection = nil
+    end
+    if VisualFeatures.densityConnection then
+        VisualFeatures.densityConnection:Disconnect()
+        VisualFeatures.densityConnection = nil
+    end
+
+    for atmosphere, originalDensity in pairs(VisualFeatures.originalDensities) do
+        if atmosphere.Parent then
+            pcall(function()
+                atmosphere.Density = originalDensity
+            end)
+        end
+        VisualFeatures.originalDensities[atmosphere] = nil
+    end
+    VisualFeatures.atmosphere = nil
+    VisualFeatures.originalDensity = nil
+end
+
+function VisualFeatures.getNapeHitbox(titan)
+    local hitboxes = titan and titan:FindFirstChild("Hitboxes")
+    local hit = hitboxes and hitboxes:FindFirstChild("Hit")
+    local nape = hit and hit:FindFirstChild("Nape")
+    return nape and nape:IsA("BasePart") and nape or nil
+end
+
+function VisualFeatures.extendNape(titan)
+    local nape = VisualFeatures.getNapeHitbox(titan)
+    if not nape then
+        return
+    end
+
+    if not VisualFeatures.napeOriginals[nape] then
+        VisualFeatures.napeOriginals[nape] = {
+            Size = nape.Size,
+            Color = nape.Color,
+            Material = nape.Material,
+            Transparency = nape.Transparency,
+        }
+    end
+
+    pcall(function()
+        nape.Size = Vector3.new(60, 60, 60)
+        nape.Color = Color3.new(1, 1, 1)
+        nape.Material = Enum.Material.Neon
+    end)
+end
+
+function VisualFeatures.restoreNapes()
+    for nape, properties in pairs(VisualFeatures.napeOriginals) do
+        if nape.Parent then
+            pcall(function()
+                nape.Size = properties.Size
+                nape.Color = properties.Color
+                nape.Material = properties.Material
+                nape.Transparency = properties.Transparency
+            end)
+        end
+        VisualFeatures.napeOriginals[nape] = nil
+    end
+end
+
+function VisualFeatures.stopNapeMonitor()
+    if VisualFeatures.napeChildAddedConnection then
+        VisualFeatures.napeChildAddedConnection:Disconnect()
+        VisualFeatures.napeChildAddedConnection = nil
+    end
+    if VisualFeatures.napeWorkspaceConnection then
+        VisualFeatures.napeWorkspaceConnection:Disconnect()
+        VisualFeatures.napeWorkspaceConnection = nil
+    end
+    VisualFeatures.napeFolder = nil
+end
+
+function VisualFeatures.attachNapeMonitor(titans)
+    if not VisualFeatures.napeExtenderEnabled or VisualFeatures.napeFolder == titans then
+        return
+    end
+
+    VisualFeatures.stopNapeMonitor()
+    VisualFeatures.napeFolder = titans
+    for _, titan in ipairs(titans:GetChildren()) do
+        VisualFeatures.extendNape(titan)
+    end
+
+    VisualFeatures.napeChildAddedConnection = titans.ChildAdded:Connect(function(titan)
+        task.delay(0.1, function()
+            if VisualFeatures.napeExtenderEnabled and titan.Parent == titans then
+                VisualFeatures.extendNape(titan)
+            end
+        end)
+    end)
+end
+
+function VisualFeatures.setNapeExtender(enabled)
+    VisualFeatures.napeExtenderEnabled = enabled
+    if not enabled then
+        VisualFeatures.stopNapeMonitor()
+        VisualFeatures.restoreNapes()
+        return
+    end
+
+    local titans = workspace:FindFirstChild("Titans")
+    if titans then
+        VisualFeatures.attachNapeMonitor(titans)
+    elseif not VisualFeatures.napeWorkspaceConnection then
+        VisualFeatures.napeWorkspaceConnection = workspace.ChildAdded:Connect(function(child)
+            if child.Name == "Titans" and VisualFeatures.napeExtenderEnabled then
+                if VisualFeatures.napeWorkspaceConnection then
+                    VisualFeatures.napeWorkspaceConnection:Disconnect()
+                    VisualFeatures.napeWorkspaceConnection = nil
+                end
+                VisualFeatures.attachNapeMonitor(child)
+            end
+        end)
+    end
+end
+
+function VisualFeatures.removeTitanHighlight(titan)
+    local highlight = VisualFeatures.titanHighlights[titan]
+    if highlight then
+        pcall(function()
+            highlight:Destroy()
+        end)
+        VisualFeatures.titanHighlights[titan] = nil
+    end
+end
+
+function VisualFeatures.addTitanHighlight(titan)
+    if not VisualFeatures.titanEspEnabled or not VisualFeatures.titanEspFolder
+        or VisualFeatures.titanHighlights[titan] or titan:GetAttribute("State") == "Dead" then
+        return
+    end
+
+    local highlight = Instance.new("Highlight")
+    highlight.FillColor = Color3.fromRGB(255, 255, 255)
+    highlight.OutlineColor = Color3.fromRGB(255, 255, 255)
+    highlight.FillTransparency = 0.45
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Adornee = titan
+    highlight.Parent = VisualFeatures.titanEspFolder
+    VisualFeatures.titanHighlights[titan] = highlight
+end
+
+function VisualFeatures.clearTitanESP()
+    if VisualFeatures.titanChildAddedConnection then
+        VisualFeatures.titanChildAddedConnection:Disconnect()
+        VisualFeatures.titanChildAddedConnection = nil
+    end
+    if VisualFeatures.titanChildRemovedConnection then
+        VisualFeatures.titanChildRemovedConnection:Disconnect()
+        VisualFeatures.titanChildRemovedConnection = nil
+    end
+    if VisualFeatures.titanWorkspaceConnection then
+        VisualFeatures.titanWorkspaceConnection:Disconnect()
+        VisualFeatures.titanWorkspaceConnection = nil
+    end
+    if VisualFeatures.titanEspFolder then
+        VisualFeatures.titanEspFolder:Destroy()
+        VisualFeatures.titanEspFolder = nil
+    end
+    VisualFeatures.titanHighlights = {}
+end
+
+function VisualFeatures.attachTitanESP(titans)
+    if not VisualFeatures.titanEspEnabled or VisualFeatures.titanEspFolder then
+        return
+    end
+
+    local espFolder = Instance.new("Folder")
+    espFolder.Name = "AOTR_TitanESP"
+    espFolder.Parent = workspace
+    VisualFeatures.titanEspFolder = espFolder
+
+    for _, titan in ipairs(titans:GetChildren()) do
+        VisualFeatures.addTitanHighlight(titan)
+    end
+
+    VisualFeatures.titanChildAddedConnection = titans.ChildAdded:Connect(function(titan)
+        task.delay(0.1, function()
+            if titan.Parent == titans then
+                VisualFeatures.addTitanHighlight(titan)
+            end
+        end)
+    end)
+    VisualFeatures.titanChildRemovedConnection = titans.ChildRemoved:Connect(function(titan)
+        VisualFeatures.removeTitanHighlight(titan)
+    end)
+end
+
+function VisualFeatures.setTitanESP(enabled)
+    VisualFeatures.titanEspEnabled = enabled
+    if not enabled then
+        VisualFeatures.clearTitanESP()
+        return
+    end
+
+    local titans = workspace:FindFirstChild("Titans")
+    if titans then
+        VisualFeatures.attachTitanESP(titans)
+    elseif not VisualFeatures.titanWorkspaceConnection then
+        VisualFeatures.titanWorkspaceConnection = workspace.ChildAdded:Connect(function(child)
+            if child.Name == "Titans" and VisualFeatures.titanEspEnabled then
+                if VisualFeatures.titanWorkspaceConnection then
+                    VisualFeatures.titanWorkspaceConnection:Disconnect()
+                    VisualFeatures.titanWorkspaceConnection = nil
+                end
+                VisualFeatures.attachTitanESP(child)
+            end
+        end)
+    end
+end
+
 function CombatFeatures.getBladeRig()
     local character = LocalPlayer.Character
     if character then
@@ -778,23 +1098,71 @@ function FarmFeatures.isActive(runId)
     return FarmFeatures.enabled and FarmFeatures.runId == runId
 end
 
+function FarmFeatures.clearMovement()
+    if FarmFeatures.movementBodyPosition then
+        pcall(function()
+            FarmFeatures.movementBodyPosition:Destroy()
+        end)
+        FarmFeatures.movementBodyPosition = nil
+    end
+    if FarmFeatures.movementHumanoid then
+        pcall(function()
+            FarmFeatures.movementHumanoid.AutoRotate = true
+        end)
+        FarmFeatures.movementHumanoid = nil
+    end
+end
+
 function FarmFeatures.shouldHoldForSafetyTimer()
     local mode = workspace:GetAttribute("Type")
     local minimumTime = mode == "Missions" and FarmFeatures.missionSafetyTimer
         or mode == "Raids" and FarmFeatures.raidSafetyTimer
-    local seconds = tonumber(workspace:GetAttribute("Seconds"))
-    if not minimumTime or not seconds then
+    local gameSeconds = tonumber(workspace:GetAttribute("Seconds"))
+    if not minimumTime or not gameSeconds then
         return false, 0
     end
 
-    if FarmFeatures.lastSessionSeconds ~= seconds then
-        FarmFeatures.lastSessionSeconds = seconds
-        FarmFeatures.lastSessionSecondsChangedAt = tick()
-    elseif tick() - FarmFeatures.lastSessionSecondsChangedAt > 6 then
-        return false, 0
+    local now = tick()
+    if FarmFeatures.lastSessionSeconds == nil or gameSeconds < FarmFeatures.lastSessionSeconds then
+        FarmFeatures.lastSessionSecondsChangedAt = now
+    elseif gameSeconds ~= FarmFeatures.lastSessionSeconds then
+        FarmFeatures.lastSessionSecondsChangedAt = now
     end
+    FarmFeatures.lastSessionSeconds = gameSeconds
+
+    -- Some missions pause the replicated timer while the final Titan is alive.
+    -- Keep the safety countdown moving with wall time during that pause.
+    local seconds = gameSeconds + math.max(0, now - FarmFeatures.lastSessionSecondsChangedAt)
     if seconds >= minimumTime then
         return false, 0
+    end
+
+    local titans = workspace:FindFirstChild("Titans")
+    if titans then
+        local remainingTitans = 0
+        for _, titan in ipairs(titans:GetChildren()) do
+            local humanoid = titan:IsA("Model") and titan:FindFirstChildOfClass("Humanoid")
+            local state = titan:GetAttribute("State")
+            if humanoid and humanoid.Health > 0 and state ~= nil
+                and state ~= "Roar" and state ~= "HeatWave" then
+                local hitboxes = titan:FindFirstChild("Hitboxes")
+                local hit = hitboxes and hitboxes:FindFirstChild("Hit")
+                local nape = hit and hit:FindFirstChild("Nape")
+                if not nape then
+                    local hitFolder = titan:FindFirstChild("Hit", true)
+                    nape = hitFolder and hitFolder:FindFirstChild("Nape")
+                end
+                if nape and nape:IsA("BasePart") then
+                    remainingTitans += 1
+                    if remainingTitans > 1 then
+                        break
+                    end
+                end
+            end
+        end
+        if remainingTitans == 1 then
+            return true, minimumTime - seconds
+        end
     end
 
     local objectives = Services.ReplicatedStorage:FindFirstChild("Objectives")
@@ -807,6 +1175,8 @@ function FarmFeatures.shouldHoldForSafetyTimer()
     local selectedObjective
     if objectiveName == "Breach" then
         selectedObjective = objectives:FindFirstChild("Protect_HQ")
+    elseif holdableObjectives[objectiveName] then
+        selectedObjective = objectives:FindFirstChild(objectiveName)
     end
     if not selectedObjective then
         for _, objective in ipairs(objectives:GetChildren()) do
@@ -838,6 +1208,14 @@ end
 function FarmFeatures.stop()
     FarmFeatures.enabled = false
     FarmFeatures.runId += 1
+    if FarmFeatures.movementConnection then
+        FarmFeatures.movementConnection:Disconnect()
+        FarmFeatures.movementConnection = nil
+    end
+    FarmFeatures.movementTarget = nil
+    FarmFeatures.movementNape = nil
+    FarmFeatures.clearMovement()
+    SoloOnly.stop()
     FarmFeatures.setStatus("Idle")
 end
 
@@ -845,7 +1223,71 @@ function FarmFeatures.start()
     FarmFeatures.enabled = true
     FarmFeatures.runId += 1
     local runId = FarmFeatures.runId
+    FarmFeatures.lastSessionSeconds = nil
+    FarmFeatures.lastSessionSecondsChangedAt = tick()
+    FarmFeatures.soloOnlyCheckedForSession = false
     FarmFeatures.setStatus("Waiting before farming...")
+    SoloOnly.start()
+
+    if FarmFeatures.movementConnection then
+        FarmFeatures.movementConnection:Disconnect()
+    end
+    FarmFeatures.movementTarget = nil
+    FarmFeatures.movementNape = nil
+    FarmFeatures.movementConnection = Services.RunService.Heartbeat:Connect(function(deltaTime)
+        local nape = FarmFeatures.movementNape
+        local target = FarmFeatures.movementTarget
+        local character = LocalPlayer.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+        local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+        if not FarmFeatures.isActive(runId) or not CombatFeatures.isCombatSession()
+            or not nape or not nape.Parent or not target or not rootPart or not humanoid then
+            FarmFeatures.clearMovement()
+            return
+        end
+
+        if FarmFeatures.movementHumanoid ~= humanoid then
+            if FarmFeatures.movementHumanoid then
+                pcall(function()
+                    FarmFeatures.movementHumanoid.AutoRotate = true
+                end)
+            end
+            pcall(function()
+                humanoid.AutoRotate = false
+            end)
+            FarmFeatures.movementHumanoid = humanoid
+        end
+
+        if rootPart.Anchored then
+            rootPart.Anchored = false
+        end
+
+        local mover = FarmFeatures.movementBodyPosition
+        if not mover or mover.Parent ~= rootPart then
+            FarmFeatures.clearMovement()
+            pcall(function()
+                humanoid.AutoRotate = false
+            end)
+            FarmFeatures.movementHumanoid = humanoid
+            mover = Instance.new("BodyPosition")
+            mover.Name = "AOTR_Farm_Hover"
+            mover.MaxForce = Vector3.new(100000000, 100000000, 100000000)
+            mover.Position = rootPart.Position
+            mover.Parent = rootPart
+            FarmFeatures.movementBodyPosition = mover
+        end
+
+        local speed = math.clamp((tonumber(FarmFeatures.hoverSpeed) or 500) / 130, 4, 16)
+        mover.P = 5000 + speed * 500
+        mover.D = 1000 + speed * 100
+        mover.Position = nape.Position + Vector3.new(0, FarmFeatures.hoverHeight, 0)
+        if (mover.Position - rootPart.Position).Magnitude <= 3 then
+            pcall(function()
+                rootPart.AssemblyLinearVelocity = Vector3.zero
+                rootPart.AssemblyAngularVelocity = Vector3.zero
+            end)
+        end
+    end)
 
     task.spawn(function()
         local waitUntil = os.clock() + math.max(0, FarmFeatures.waitBeforeFarming)
@@ -862,12 +1304,24 @@ function FarmFeatures.start()
                 break
             end
 
-            if game.PlaceId == 14916516914 or not workspace:FindFirstChild("Titans") then
+            if not CombatFeatures.isCombatSession() then
+                FarmFeatures.movementTarget = nil
+                FarmFeatures.movementNape = nil
+                FarmFeatures.soloOnlyCheckedForSession = false
                 FarmFeatures.setStatus("Waiting for a combat session")
                 continue
             end
 
+            if SoloOnly.enabled and not FarmFeatures.soloOnlyCheckedForSession then
+                FarmFeatures.soloOnlyCheckedForSession = true
+                if SoloOnly.checkExistingPlayers() then
+                    break
+                end
+            end
+
             if workspace:GetAttribute("Rewarded") or workspace:GetAttribute("Force_End") then
+                FarmFeatures.movementTarget = nil
+                FarmFeatures.movementNape = nil
                 FarmFeatures.setStatus("Session complete; waiting for the next round")
                 continue
             end
@@ -876,15 +1330,14 @@ function FarmFeatures.start()
             local rootPart = character and character:FindFirstChild("HumanoidRootPart")
             local nape = CombatFeatures.getNearestEscapeNape()
             if not rootPart or not nape or not nape.Parent then
+                FarmFeatures.movementTarget = nil
+                FarmFeatures.movementNape = nil
                 FarmFeatures.setStatus("Searching for a target")
                 continue
             end
 
-            local destination = nape.Position + Vector3.new(0, FarmFeatures.hoverHeight, 0)
-            local speed = math.clamp((tonumber(FarmFeatures.hoverSpeed) or 500) / 130, 4, 16)
-            local alpha = 1 - math.exp(-speed * 0.1)
-            local nextPosition = rootPart.Position:Lerp(destination, alpha)
-            rootPart.CFrame = CFrame.lookAt(nextPosition, nape.Position)
+            FarmFeatures.movementNape = nape
+            FarmFeatures.movementTarget = nape.Position + Vector3.new(0, FarmFeatures.hoverHeight, 0)
 
             local safetyHold, safetyRemaining = FarmFeatures.shouldHoldForSafetyTimer()
             if safetyHold then
@@ -948,6 +1401,120 @@ function FarmFeatures.setAutoExecute(value)
 
     warn("[AOTR] Auto Execute queued; AOTR.lua will reload after the next teleport.")
 end
+
+local function updateAutoLobbySubtitle()
+    if AutoLobby.titleStack then
+        AutoLobby.titleStack.Subtitle = string.format(
+            "Missions/raids before returning. Completed: %d/%d.",
+            AutoLobby.completedSessions,
+            AutoLobby.after
+        )
+    end
+end
+
+local function returnFarmToLobby(statusMessage)
+    if AutoLobby.returning then
+        return
+    end
+
+    AutoLobby.returning = true
+    AutoLobby.completedSessions = 0
+    updateAutoLobbySubtitle()
+    FarmFeatures.stop()
+    if autoFarmToggle then
+        autoFarmToggle.Value = false
+    end
+    FarmFeatures.setStatus(statusMessage or "Returning to Lobby...")
+
+    task.spawn(function()
+        local deadline = os.clock() + 30
+        while CombatFeatures.isCombatSession() and os.clock() < deadline do
+            CombatFeatures.sendPost("Functions", "Teleport")
+            task.wait(2)
+        end
+
+        if CombatFeatures.isCombatSession() then
+            AutoLobby.returning = false
+            FarmFeatures.setStatus("Lobby return failed; try manually.")
+            warn("[AOTR] Could not leave the combat session for the Lobby.")
+            return
+        end
+
+        AutoLobby.returning = false
+        FarmFeatures.setStatus("Returned to Lobby.")
+    end)
+end
+
+function SoloOnly.stop()
+    if SoloOnly.playerAddedConnection then
+        SoloOnly.playerAddedConnection:Disconnect()
+        SoloOnly.playerAddedConnection = nil
+    end
+end
+
+function SoloOnly.checkExistingPlayers()
+    if not SoloOnly.enabled or not FarmFeatures.enabled or not CombatFeatures.isCombatSession() then
+        return false
+    end
+
+    for _, player in ipairs(Services.Players:GetPlayers()) do
+        if player ~= LocalPlayer then
+            returnFarmToLobby(player.Name .. " joined; returning to Lobby...")
+            return true
+        end
+    end
+    return false
+end
+
+function SoloOnly.start()
+    SoloOnly.stop()
+    SoloOnly.checkedForSession = false
+    if not SoloOnly.enabled or not FarmFeatures.enabled then
+        return
+    end
+
+    SoloOnly.playerAddedConnection = Services.Players.PlayerAdded:Connect(function(player)
+        if player ~= LocalPlayer
+            and SoloOnly.enabled
+            and FarmFeatures.enabled
+            and CombatFeatures.isCombatSession() then
+            returnFarmToLobby(player.Name .. " joined; returning to Lobby...")
+        end
+    end)
+
+    if CombatFeatures.isCombatSession() then
+        SoloOnly.checkedForSession = true
+        SoloOnly.checkExistingPlayers()
+    end
+end
+
+local function onAutoLobbyRewardedChanged()
+    if not AutoLobby.enabled or not FarmFeatures.enabled or AutoLobby.returning then
+        return
+    end
+    if workspace:GetAttribute("Rewarded") ~= true then
+        return
+    end
+
+    local mode = workspace:GetAttribute("Type")
+    if mode ~= "Missions" and mode ~= "Raids" then
+        return
+    end
+
+    AutoLobby.completedSessions += 1
+    updateAutoLobbySubtitle()
+    if AutoLobby.completedSessions >= AutoLobby.after then
+        returnFarmToLobby()
+    else
+        FarmFeatures.setStatus(string.format(
+            "Completed %d/%d missions or raids",
+            AutoLobby.completedSessions,
+            AutoLobby.after
+        ))
+    end
+end
+
+autoLobbyRewardConnection = workspace:GetAttributeChangedSignal("Rewarded"):Connect(onAutoLobbyRewardedChanged)
 
 local function missionObjectivesFor(mapName)
     for _, mapInfo in ipairs(missionMaps) do
@@ -1794,6 +2361,89 @@ local window = App:Window({
     UIBlur = false,
 })
 
+local mouseInput = Services.UserInputService
+local previousMouseIconEnabled = mouseInput.MouseIconEnabled
+local windowBodyInstance = window.Structures.Body.__instance
+local windowPillInstance = App.Structures.WindowPill.__instance
+local mouseBehaviorBeforeUi = {
+    value = nil,
+    managed = false,
+    wasInCombatSession = CombatFeatures.isCombatSession(),
+}
+
+local function isMouseOver(guiObject, mousePosition)
+    if not guiObject or not guiObject.Parent or not guiObject.Visible then
+        return false
+    end
+
+    local position = guiObject.AbsolutePosition
+    local size = guiObject.AbsoluteSize
+    return mousePosition.X >= position.X
+        and mousePosition.X <= position.X + size.X
+        and mousePosition.Y >= position.Y
+        and mousePosition.Y <= position.Y + size.Y
+end
+
+local function updateMouseCursor()
+    if not windowBodyInstance.Parent then
+        return
+    end
+
+    if not CombatFeatures.isCombatSession() then
+        if mouseBehaviorBeforeUi.wasInCombatSession and mouseBehaviorBeforeUi.managed then
+            mouseInput.MouseIconEnabled = true
+            mouseInput.MouseBehavior = Enum.MouseBehavior.Default
+            mouseBehaviorBeforeUi.value = nil
+            mouseBehaviorBeforeUi.managed = false
+        end
+        mouseBehaviorBeforeUi.wasInCombatSession = false
+        return
+    end
+    mouseBehaviorBeforeUi.wasInCombatSession = true
+
+    local mousePosition = mouseInput:GetMouseLocation()
+    local overWindow = not window.Minimized and isMouseOver(windowBodyInstance, mousePosition)
+    local overWindowPill = isMouseOver(windowPillInstance, mousePosition)
+    local cursorVisible = overWindow or overWindowPill
+
+    if mouseInput.MouseIconEnabled ~= cursorVisible then
+        mouseInput.MouseIconEnabled = cursorVisible
+        mouseBehaviorBeforeUi.managed = true
+    end
+
+    if cursorVisible and mouseInput.MouseBehavior ~= Enum.MouseBehavior.Default then
+        mouseBehaviorBeforeUi.value = mouseInput.MouseBehavior
+        mouseInput.MouseBehavior = Enum.MouseBehavior.Default
+        mouseBehaviorBeforeUi.managed = true
+    elseif not cursorVisible and mouseBehaviorBeforeUi.value then
+        mouseInput.MouseBehavior = mouseBehaviorBeforeUi.value
+        mouseBehaviorBeforeUi.value = nil
+    end
+end
+
+updateMouseCursor()
+local mouseCursorConnection = Services.RunService.RenderStepped:Connect(updateMouseCursor)
+local rightShiftConnection = mouseInput.InputBegan:Connect(function(input)
+    if input.KeyCode ~= Enum.KeyCode.RightShift or mouseInput:GetFocusedTextBox() then
+        return
+    end
+
+    window.Minimized = not window.Minimized
+end)
+windowBodyInstance.Destroying:Connect(function()
+    mouseCursorConnection:Disconnect()
+    rightShiftConnection:Disconnect()
+    if autoLobbyRewardConnection then
+        autoLobbyRewardConnection:Disconnect()
+    end
+    if mouseBehaviorBeforeUi.managed then
+        mouseInput.MouseIconEnabled = previousMouseIconEnabled
+    end
+    if mouseBehaviorBeforeUi.value then
+        mouseInput.MouseBehavior = mouseBehaviorBeforeUi.value
+    end
+end)
+
 -- InGame --
 local inGame = window:Section({ Title = "In-Game" })
 local Farming = inGame:Tab({
@@ -1820,7 +2470,7 @@ do
         Title = "Auto Farm",
         Subtitle = "Move to Titans and attack their Nape during a session.",
     })
-    autoFarmRow:Right():Toggle({
+    autoFarmToggle = autoFarmRow:Right():Toggle({
         Value = false,
         ValueChanged = function(_, value)
             if value then
@@ -1840,6 +2490,37 @@ do
         Value = false,
         ValueChanged = function(_, value)
             FarmFeatures.setAutoExecute(value)
+        end,
+    })
+end
+
+do
+    local miscellaneousForm = Farming:PageSection({
+        Title = "Miscellaneous",
+        Subtitle = "Visual and weak-point helpers for combat sessions.",
+    }):Form()
+
+    local napeExtenderRow = miscellaneousForm:Row({ SearchIndex = "Nape Extender" })
+    napeExtenderRow:Left():TitleStack({
+        Title = "Nape Extender",
+        Subtitle = "Expand all Titan Nape hitboxes.",
+    })
+    napeExtenderRow:Right():Toggle({
+        Value = VisualFeatures.napeExtenderEnabled,
+        ValueChanged = function(_, value)
+            VisualFeatures.setNapeExtender(value)
+        end,
+    })
+
+    local titanEspRow = miscellaneousForm:Row({ SearchIndex = "Titan ESP" })
+    titanEspRow:Left():TitleStack({
+        Title = "Titan ESP",
+        Subtitle = "Highlight Titans through walls.",
+    })
+    titanEspRow:Right():Toggle({
+        Value = VisualFeatures.titanEspEnabled,
+        ValueChanged = function(_, value)
+            VisualFeatures.setTitanESP(value)
         end,
     })
 end
@@ -1987,6 +2668,91 @@ do
             waitBeforeFarmTitle.Subtitle = string.format("Start delay: %ds.", math.floor(value + 0.5))
         end,
     })
+
+    local autoLobbyForm = Settings:PageSection({
+        Title = "Auto Lobby",
+        Subtitle = "Return to the Lobby after a chosen number of completed missions or raids.",
+    }):Form()
+
+    local autoLobbyToggleRow = autoLobbyForm:Row({ SearchIndex = "Auto Back to Lobby" })
+    autoLobbyToggleRow:Left():TitleStack({
+        Title = "Auto Back to Lobby",
+        Subtitle = "Return to the Lobby after completing the selected number of missions or raids.",
+    })
+    autoLobbyToggleRow:Right():Toggle({
+        Value = AutoLobby.enabled,
+        ValueChanged = function(_, value)
+            AutoLobby.enabled = value
+            if not value then
+                AutoLobby.completedSessions = 0
+                AutoLobby.returning = false
+            end
+            updateAutoLobbySubtitle()
+        end,
+    })
+
+    local autoLobbyAfterRow = autoLobbyForm:Row({ SearchIndex = "Back to Lobby After" })
+    AutoLobby.titleStack = autoLobbyAfterRow:Left():TitleStack({
+        Title = "Back to Lobby After",
+        Subtitle = string.format(
+            "Missions/raids before returning. Completed: %d/%d.",
+            AutoLobby.completedSessions,
+            AutoLobby.after
+        ),
+    })
+    autoLobbyAfterRow:Right():Slider({
+        Minimum = 1,
+        Maximum = 50,
+        Value = AutoLobby.after,
+        ValueChanged = function(_, value)
+            AutoLobby.after = math.floor(value + 0.5)
+            if AutoLobby.completedSessions >= AutoLobby.after then
+                AutoLobby.completedSessions = math.max(0, AutoLobby.after - 1)
+            end
+            updateAutoLobbySubtitle()
+        end,
+    })
+
+    local soloOnlyForm = Settings:PageSection({
+        Title = "Solo Only",
+        Subtitle = "Leave if another player joins while Auto Farm is running.",
+    }):Form()
+
+    local soloOnlyRow = soloOnlyForm:Row({ SearchIndex = "Solo Only" })
+    soloOnlyRow:Left():TitleStack({
+        Title = "Solo Only",
+        Subtitle = "Auto leave if another player joins while farming.",
+    })
+    soloOnlyRow:Right():Toggle({
+        Value = SoloOnly.enabled,
+        ValueChanged = function(_, value)
+            SoloOnly.enabled = value
+            if value then
+                SoloOnly.start()
+            else
+                SoloOnly.stop()
+                SoloOnly.checkedForSession = false
+            end
+        end,
+    })
+
+    local visualForm = Settings:PageSection({
+        Title = "Visual",
+        Subtitle = "Adjust in-game visibility effects.",
+    }):Form()
+
+    local removeFogRow = visualForm:Row({ SearchIndex = "Remove Fog" })
+    removeFogRow:Left():TitleStack({
+        Title = "Remove Fog",
+        Subtitle = "Turn off fog in-game and keep it reduced when the game reapplies it.",
+    })
+    removeFogRow:Right():Toggle({
+        Value = VisualFeatures.removeFogEnabled,
+        ValueChanged = function(_, value)
+            VisualFeatures.setFog(value)
+        end,
+    })
+    VisualFeatures.setFog(VisualFeatures.removeFogEnabled)
 end
 
 -- Lobby -- 
@@ -2649,6 +3415,7 @@ goToLobbyRow:Right():Toggle({
 
 
 -- Misc --
+;(function(window, App, cascade, Services, configRecorder)
 local misc = window:Section({ Title = "Misc" })
 local Config = misc:Tab({
     Title = "Config",
@@ -2762,13 +3529,138 @@ backgroundBlurRow:Right():Toggle({
 
 local ConfigManager = loadstring(game:HttpGetAsync("https://raw.githubusercontent.com/Valox321/Custom-UI/main/Casade-Config"))(Config, Services, configRecorder)
 
-local Stats = misc:Tab({
-    Title = "Stats",
-    Icon = cascade.Symbols.chartBar,
+local MiscTab = misc:Tab({
+    Title = "Misc",
+    Icon = cascade.Symbols.sidebarLeft,
 })
 
-local Performance = misc:Tab({
-    Title = "Performance",
-    Icon = cascade.Symbols.gaugeWithNeedle,
+local utilityForm = MiscTab:PageSection({
+    Title = "Safety & Utilities",
+    Subtitle = "Check account status and move between game areas.",
+}):Form()
+
+local function showUtilityNotification(title, message)
+    local succeeded, notificationError = pcall(function()
+        App:Notification({
+            App = "AOTR",
+            Title = title,
+            Subtitle = message,
+            Icon = cascade.Symbols.bell,
+            Duration = 5,
+        })
+    end)
+
+    if not succeeded then
+        warn("[AOTR] Cascade notification failed: " .. tostring(notificationError))
+    end
+end
+
+local shadowBanRow = utilityForm:Row({ SearchIndex = "Shadow Ban Check" })
+shadowBanRow:Left():TitleStack({
+    Title = "Shadow Ban Check",
+    Subtitle = "Check for hidden ban indicators.",
 })
+shadowBanRow:Right():Button({
+    Label = "Check",
+    State = "Primary",
+    Pushed = function()
+        task.spawn(function()
+            local player = Services.Players.LocalPlayer
+            local blacklistedValue = player:GetAttribute("Blacklisted")
+            local exploiterValue = player:GetAttribute("Exploiter")
+            local blacklisted = blacklistedValue == true
+            local exploiter = exploiterValue == true
+            local dataReceived = blacklistedValue ~= nil or exploiterValue ~= nil
+            local lobbyArea = game.PlaceId == 13379208636
+                or game.PlaceId == 14916516914
+                or game.PlaceId == 14932214603
+            local disabledReason
+            local assets = Services.ReplicatedStorage:FindFirstChild("Assets")
+            local remotes = assets and assets:FindFirstChild("Remotes")
+            local getRemote = remotes and remotes:FindFirstChild("GET")
+
+            if getRemote then
+                local succeeded, response1, response2, response3 = pcall(function()
+                    return getRemote:InvokeServer("Functions", "Settings", "Blur", "Off")
+                end)
+
+                if succeeded then
+                    local responses = table.pack(response1, response2, response3)
+                    local fallbackTable
+                    for index = 1, responses.n do
+                        local response = responses[index]
+                        if type(response) == "table" then
+                            fallbackTable = fallbackTable or response
+                            if response.Current_Slot ~= nil or type(response.Slots) == "table"
+                                or response.Disabled ~= nil then
+                                fallbackTable = response
+                                break
+                            end
+                        end
+                    end
+
+                    if fallbackTable then
+                        dataReceived = true
+                        disabledReason = fallbackTable.Disabled
+                    end
+                end
+            end
+
+            local disabled = disabledReason ~= nil and disabledReason ~= false and disabledReason ~= ""
+            if blacklisted or exploiter or disabled then
+                local reason = disabled and tostring(disabledReason) or "Blacklisted/Exploiter flag"
+                showUtilityNotification("SHADOW BANNED", "You are shadow banned: " .. reason)
+            elseif lobbyArea or dataReceived then
+                showUtilityNotification("NOT SHADOW BANNED", "Check found no ban flag.")
+            else
+                showUtilityNotification("UNKNOWN", "Could not verify account status.")
+            end
+        end)
+    end,
+})
+
+local returnLobbyRow = utilityForm:Row({ SearchIndex = "Return To Lobby" })
+returnLobbyRow:Left():TitleStack({
+    Title = "Return To Lobby",
+    Subtitle = "Go to the Lobby or rejoin it if you are already there.",
+})
+returnLobbyRow:Right():Button({
+    Label = "Go",
+    State = "Primary",
+    Pushed = function()
+        task.spawn(function()
+            if CombatFeatures.isCombatSession() then
+                local sent, sendError = CombatFeatures.sendPost("Functions", "Teleport")
+                if not sent then
+                    showUtilityNotification("Return To Lobby", tostring(sendError))
+                end
+                return
+            end
+
+            local result = invokeActorFunction("Functions", "Teleport", "Lobby")
+            if not result or not result.ok then
+                showUtilityNotification("Return To Lobby", "Lobby teleport failed.")
+            end
+        end)
+    end,
+})
+
+local returnMainMenuRow = utilityForm:Row({ SearchIndex = "Return To Main Menu" })
+returnMainMenuRow:Left():TitleStack({
+    Title = "Return To Main Menu",
+    Subtitle = "Teleport to the Main Menu.",
+})
+returnMainMenuRow:Right():Button({
+    Label = "Go",
+    State = "Primary",
+    Pushed = function()
+        local succeeded, teleportError = pcall(function()
+            Services.TeleportService:Teleport(13379208636, Services.Players.LocalPlayer)
+        end)
+        if not succeeded then
+            showUtilityNotification("Return To Main Menu", tostring(teleportError))
+        end
+    end,
+})
+end)(window, App, cascade, Services, configRecorder)
 
