@@ -145,6 +145,10 @@ local configForm = Config:PageSection({
     Subtitle = "Save your settings and restore them later.",
 }):Form()
 
+local statusLabel = configForm:Row():Left():Label({
+    Text = "Ready",
+})
+
 local nameRow = configForm:Row()
 nameRow:Left():TitleStack({
     Title = "Configuration name",
@@ -295,10 +299,6 @@ local function saveConfig(name)
 
     return true
 end
-
-local statusLabel = configForm:Row():Left():Label({
-    Text = "Ready",
-})
 
 local function reportConfigResult(action, success, detail)
     local message = success and (action .. " completed" .. (detail and (": " .. tostring(detail)) or ""))
