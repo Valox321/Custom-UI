@@ -21,8 +21,11 @@ local valueComponentTypes = {
 
 local function componentTitle(node)
     local ok, title = pcall(function()
-        return node.Object.Title
+        return node.Object and node.Object.Title
     end)
+    if (not ok or type(title) ~= "string" or title == "") and type(node.Properties) == "table" then
+        title = node.Properties.Title
+    end
     if ok and type(title) == "string" and title ~= "" then
         return title
     end
@@ -227,6 +230,7 @@ local function readConfig(name)
     for key, control in pairs(configControls) do
         controls[key] = control
     end
+    local matchedCount = 0
     for key, control in pairs(controls) do
         local value = data[key]
         if value == nil then
@@ -238,13 +242,20 @@ local function readConfig(name)
             end
         end
         if value ~= nil then
-            pcall(function()
+            local applied = pcall(function()
                 control.Value = value
             end)
+            if applied then
+                matchedCount += 1
+            end
         end
     end
 
-    return true
+    if matchedCount == 0 then
+        return false, "No matching saved controls were found; save this config again with the updated script"
+    end
+
+    return true, tostring(matchedCount) .. " setting(s) loaded"
 end
 
 local function saveConfig(name)
@@ -291,7 +302,8 @@ local statusLabel = configForm:Row():Left():Label({
 })
 
 local function reportConfigResult(action, success, detail)
-    local message = success and (action .. " completed") or (action .. " failed: " .. tostring(detail))
+    local message = success and (action .. " completed" .. (detail and (": " .. tostring(detail)) or ""))
+        or (action .. " failed: " .. tostring(detail))
     statusLabel.Text = message
     print("[AOTR Config] " .. message)
     if not success then
