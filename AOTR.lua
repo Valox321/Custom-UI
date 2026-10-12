@@ -105,9 +105,6 @@ local FarmFeatures = {
     dieAtStreakCount = 1000,
     multiHitEnabled = false,
     multiHitAmount = 3,
-    multiHitRadius = 250,
-    bossBurst = 5,
-    bossHitboxRotation = 0,
     failsafeStartAt = nil,
     streakLastDeathAt = 0,
     statusLabel = nil,
@@ -555,26 +552,6 @@ function CombatFeatures.isTitanAttackable(titan)
         and state ~= nil and state ~= "Roar" and state ~= "HeatWave"
 end
 
-function CombatFeatures.pickBossHitbox(hitFolder, hitboxIndex)
-    local hitboxes = {}
-    for _, child in ipairs(hitFolder:GetChildren()) do
-        if child:IsA("BasePart") and child.Name ~= "Nape" then
-            table.insert(hitboxes, child)
-        end
-    end
-    if #hitboxes == 0 then
-        return hitFolder:FindFirstChild("Nape")
-    end
-    if hitboxIndex < 5 then
-        return hitboxes[hitboxIndex % #hitboxes + 1]
-    end
-    local offset = hitboxIndex % 10
-    if offset < 5 then
-        return hitboxes[offset % #hitboxes + 1]
-    end
-    return hitFolder:FindFirstChild("Nape")
-end
-
 function CombatFeatures.attackFarmTarget(nape, rootPart)
     local titan = CombatFeatures.getTitanFromNape(nape)
     if not CombatFeatures.isTitanAttackable(titan) then
@@ -585,75 +562,80 @@ function CombatFeatures.attackFarmTarget(nape, rootPart)
     if not titans then
         return false
     end
-    local objective = workspace:GetAttribute("Objective")
-    local isRaidBoss = objective ~= "Stall"
-        and titan.Name:match("^%x+%-%x+%-%x+%-%x+%-%x+$") ~= nil
-    CombatFeatures.sendPost("Attacks", "Slash", true)
-
-    if isRaidBoss then
-        local hitboxes = titan:FindFirstChild("Hitboxes")
-        local hitFolder = hitboxes and hitboxes:FindFirstChild("Hit")
-        local hitbox = hitFolder and CombatFeatures.pickBossHitbox(hitFolder, FarmFeatures.bossHitboxRotation)
-        if hitbox then
-            local burstCount = math.clamp(math.floor(tonumber(FarmFeatures.bossBurst) or 5), 1, 5)
-            for _ = 1, burstCount do
-                CombatFeatures.sendPost(
-                    "Hitboxes", "Register", hitbox,
-                    math.random(200, 400),
-                    math.random(100, 800) / 1000
-                )
+    local targets = { nape }
+    if FarmFeatures.multiHitEnabled then
+        local targetCount = math.clamp(math.floor(tonumber(FarmFeatures.multiHitAmount) or 3), 1, 10)
+        for _, candidateNape in ipairs(CombatFeatures.getAstraFarmTargets()) do
+            if #targets >= targetCount then
+                break
             end
-            FarmFeatures.bossHitboxRotation += 1
-        end
-    else
-        local targets = { { Titan = titan, Nape = nape } }
-        local weapon = LocalPlayer:GetAttribute("Weapon")
-        local multiHitCount = objective ~= "Stall" and weapon ~= "Spears" and FarmFeatures.multiHitEnabled
-            and math.clamp(math.floor(tonumber(FarmFeatures.multiHitAmount) or 3), 1, 10)
-            or 1
-        local extraTargets = {}
-        if multiHitCount > 1 then
-            for _, candidate in ipairs(titans:GetChildren()) do
-                if candidate ~= titan and CombatFeatures.isTitanAttackable(candidate) then
-                    local candidateHitboxes = candidate:FindFirstChild("Hitboxes")
-                    local candidateHit = candidateHitboxes and candidateHitboxes:FindFirstChild("Hit")
-                    local candidateNape = candidateHit and candidateHit:FindFirstChild("Nape")
-                    local fake = candidate:FindFirstChild("Fake")
-                    local collision = fake and fake:FindFirstChild("Collision")
-                    if candidateNape and candidateNape:IsA("BasePart")
-                        and not (collision and not collision.CanCollide)
-                        and (candidateNape.Position - nape.Position).Magnitude <= FarmFeatures.multiHitRadius then
-                        table.insert(extraTargets, {
-                            Titan = candidate,
-                            Nape = candidateNape,
-                            Distance = (rootPart.Position - candidateNape.Position).Magnitude,
-                        })
-                    end
+            if candidateNape ~= nape and candidateNape.Parent then
+                local candidateTitan = CombatFeatures.getTitanFromNape(candidateNape)
+                if candidateTitan and not candidateTitan:GetAttribute("Dead") then
+                    table.insert(targets, candidateNape)
                 end
-            end
-            table.sort(extraTargets, function(left, right)
-                return left.Distance < right.Distance
-            end)
-            for _, candidate in ipairs(extraTargets) do
-                if #targets >= multiHitCount then
-                    break
-                end
-                table.insert(targets, candidate)
-            end
-        end
-
-        for _, target in ipairs(targets) do
-            if target.Nape.Parent and CombatFeatures.isTitanAttackable(target.Titan) then
-                CombatFeatures.sendPost(
-                    "Hitboxes", "Register", target.Nape,
-                    math.random(200, 400),
-                    math.random(100, 800) / 1000
-                )
             end
         end
     end
 
-    CombatFeatures.sendPost("Attacks", "Slash", false)
+    local weapon = LocalPlayer:GetAttribute("Weapon") or "Blades"
+    if weapon == "Blades" then
+        CombatFeatures.sendPost("Attacks", "Slash", true)
+        for _, targetNape in ipairs(targets) do
+            if targetNape.Parent then
+                -- Astra's Register payload is just the Nape and its hit value.
+                CombatFeatures.sendPost("Hitboxes", "Register", targetNape, math.random(625, 850))
+            end
+        end
+        return true
+    end
+
+    local interface = PlayerGui:FindFirstChild("Interface")
+    local hud = interface and interface:FindFirstChild("HUD")
+    local main = hud and hud:FindFirstChild("Main")
+    local top = main and main:FindFirstChild("Top")
+    local weaponSlot = top and top:FindFirstChild("7")
+    local spears = weaponSlot and weaponSlot:FindFirstChild("Spears")
+    local spearLabel = spears and spears:FindFirstChild("Spears")
+    local ammoText, maximumText
+    if spearLabel then
+        ammoText, maximumText = tostring(spearLabel.Text):match("(%d+)%s*/%s*(%d+)")
+    end
+    local ammo = tonumber(ammoText)
+    local maximum = tonumber(maximumText)
+    if not ammo or ammo <= 0 then
+        return false
+    end
+
+    task.spawn(function()
+        local function readAmmo()
+            return spearLabel and tonumber(tostring(spearLabel.Text):match("(%d+)")) or 0
+        end
+        local initialAmmo = readAmmo()
+        invokeActorFunction("Spears", "S_Fire", tostring(ammo))
+        if readAmmo() == initialAmmo and maximum then
+            for count = maximum, 1, -1 do
+                local before = readAmmo()
+                invokeActorFunction("Spears", "S_Fire", tostring(count))
+                if readAmmo() < before then
+                    break
+                end
+                task.wait()
+            end
+        end
+
+        local titanName = titan.Name
+        local boss = titanName == "Attack_Titan" or titanName == "Armored_Titan"
+            or titanName == "Female_Titan" or titanName == "Colossal_Titan"
+        local bursts = boss and 40 or 1
+        for _ = 1, bursts do
+            for _, targetNape in ipairs(targets) do
+                if targetNape.Parent then
+                    CombatFeatures.sendPost("Spears", "S_Explode", targetNape.Position)
+                end
+            end
+        end
+    end)
     return true
 end
 
@@ -1678,9 +1660,11 @@ function FarmFeatures.start()
             end
 
             local attackRange = (tonumber(FarmFeatures.hoverHeight) or 200) + 50
+            local weapon = LocalPlayer:GetAttribute("Weapon") or "Blades"
+            local attackCooldown = weapon == "Blades" and 0.15 or 1
             if CombatFeatures.isTitanAttackable(CombatFeatures.getTitanFromNape(nape))
                 and (rootPart.Position - nape.Position).Magnitude <= attackRange
-                and tick() - FarmFeatures.lastAttackTime >= 0.5 then
+                and tick() - FarmFeatures.lastAttackTime >= attackCooldown then
                 FarmFeatures.lastAttackTime = tick()
                 CombatFeatures.attackFarmTarget(nape, rootPart)
             end
@@ -2973,7 +2957,7 @@ end
 do
     local multiHitForm = Farming:PageSection({
         Title = "Multi-Hit Settings (Use it as Safe as Possible)",
-        Subtitle = "Hit nearby Titans or burst hits on raid bosses.",
+        Subtitle = "Register extra Nape hits per swing.",
     }):Form()
 
     local multiHitRow = multiHitForm:Row({ SearchIndex = "Multi Hit" })
@@ -3005,37 +2989,6 @@ do
         end,
     })
 
-    local multiHitRadiusRow = multiHitForm:Row({ SearchIndex = "Multi Hit Radius" })
-    local multiHitRadiusTitle = multiHitRadiusRow:Left():TitleStack({
-        Title = "Multi Hit Radius",
-        Subtitle = string.format("Maximum distance between Titans: %d studs.", FarmFeatures.multiHitRadius),
-    })
-    multiHitRadiusRow:Right():Slider({
-        Minimum = 50,
-        Maximum = 1000,
-        Value = FarmFeatures.multiHitRadius,
-        ValueChanged = function(_, value)
-            FarmFeatures.multiHitRadius = math.clamp(math.floor((value + 12.5) / 25) * 25, 50, 1000)
-            multiHitRadiusTitle.Subtitle = string.format(
-                "Maximum distance between Titans: %d studs.", FarmFeatures.multiHitRadius
-            )
-        end,
-    })
-
-    local bossBurstRow = multiHitForm:Row({ SearchIndex = "Boss Burst" })
-    local bossBurstTitle = bossBurstRow:Left():TitleStack({
-        Title = "Boss Burst",
-        Subtitle = string.format("Hits per raid boss swing: %d.", FarmFeatures.bossBurst),
-    })
-    bossBurstRow:Right():Slider({
-        Minimum = 1,
-        Maximum = 5,
-        Value = FarmFeatures.bossBurst,
-        ValueChanged = function(_, value)
-            FarmFeatures.bossBurst = math.clamp(math.floor(value + 0.5), 1, 5)
-            bossBurstTitle.Subtitle = string.format("Hits per raid boss swing: %d.", FarmFeatures.bossBurst)
-        end,
-    })
 end
 
 do
@@ -3139,7 +3092,7 @@ do
         Subtitle = string.format("Wait before defeating the final Titan: %ds.", FarmFeatures.missionSafetyTimer),
     })
     missionTimerRow:Right():Slider({
-        Minimum = 40,
+        Minimum = 0,
         Maximum = 600,
         Value = FarmFeatures.missionSafetyTimer,
         ValueChanged = function(_, value)
@@ -3154,7 +3107,7 @@ do
         Subtitle = string.format("Minimum raid time: %ds.", FarmFeatures.raidSafetyTimer),
     })
     raidTimerRow:Right():Slider({
-        Minimum = 60,
+        Minimum = 0,
         Maximum = 900,
         Value = FarmFeatures.raidSafetyTimer,
         ValueChanged = function(_, value)
@@ -3252,7 +3205,7 @@ do
         Subtitle = string.format("Start delay: %ds.", FarmFeatures.waitBeforeFarming),
     })
     waitBeforeFarmRow:Right():Slider({
-        Minimum = 5,
+        Minimum = 0,
         Maximum = 60,
         Value = FarmFeatures.waitBeforeFarming,
         ValueChanged = function(_, value)
