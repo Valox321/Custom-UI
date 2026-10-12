@@ -926,11 +926,27 @@ function FarmFeatures.setAutoExecute(value)
 
     local queueTeleport = type(queue_on_teleport) == "function" and queue_on_teleport
         or type(queueonteleport) == "function" and queueonteleport
+        or type(queue_on_tp) == "function" and queue_on_tp
+        or type(queueontp) == "function" and queueontp
     if not queueTeleport then
+        FarmFeatures.executeEnabled = false
         warn("[AOTR] Auto Execute is unavailable: executor has no teleport queue API.")
         return
     end
-    warn("[AOTR] Auto Execute needs the public AOTR script URL before it can queue a reload.")
+
+    local scriptUrl = "https://raw.githubusercontent.com/Valox321/Custom-UI/refs/heads/main/AOTR.lua"
+    local queuedSource = string.format(
+        'local source = game:HttpGet(%q); local chunk, err = loadstring(source); assert(chunk, err); chunk()',
+        scriptUrl
+    )
+    local queued, queueError = pcall(queueTeleport, queuedSource)
+    if not queued then
+        FarmFeatures.executeEnabled = false
+        warn("[AOTR] Auto Execute could not queue the script: " .. tostring(queueError))
+        return
+    end
+
+    warn("[AOTR] Auto Execute queued; AOTR.lua will reload after the next teleport.")
 end
 
 local function missionObjectivesFor(mapName)
@@ -1893,9 +1909,9 @@ do
     }):Form()
 
     local missionTimerRow = safetyForm:Row({ SearchIndex = "Mission safety timer" })
-    missionTimerRow:Left():TitleStack({
+    local missionTimerTitle = missionTimerRow:Left():TitleStack({
         Title = "Mission Safety Timer",
-        Subtitle = "Minimum time to stay in a mission, in seconds.",
+        Subtitle = string.format("Minimum mission time: %ds.", FarmFeatures.missionSafetyTimer),
     })
     missionTimerRow:Right():Slider({
         Minimum = 40,
@@ -1903,13 +1919,14 @@ do
         Value = FarmFeatures.missionSafetyTimer,
         ValueChanged = function(_, value)
             FarmFeatures.missionSafetyTimer = value
+            missionTimerTitle.Subtitle = string.format("Minimum mission time: %ds.", math.floor(value + 0.5))
         end,
     })
 
     local raidTimerRow = safetyForm:Row({ SearchIndex = "Raid safety timer" })
-    raidTimerRow:Left():TitleStack({
+    local raidTimerTitle = raidTimerRow:Left():TitleStack({
         Title = "Raid Safety Timer",
-        Subtitle = "Minimum time to stay in a raid, in seconds.",
+        Subtitle = string.format("Minimum raid time: %ds.", FarmFeatures.raidSafetyTimer),
     })
     raidTimerRow:Right():Slider({
         Minimum = 60,
@@ -1917,6 +1934,7 @@ do
         Value = FarmFeatures.raidSafetyTimer,
         ValueChanged = function(_, value)
             FarmFeatures.raidSafetyTimer = value
+            raidTimerTitle.Subtitle = string.format("Minimum raid time: %ds.", math.floor(value + 0.5))
         end,
     })
 
@@ -1926,9 +1944,9 @@ do
     }):Form()
 
     local hoverHeightRow = movementSettingsForm:Row({ SearchIndex = "Hover height" })
-    hoverHeightRow:Left():TitleStack({
+    local hoverHeightTitle = hoverHeightRow:Left():TitleStack({
         Title = "Hover Height",
-        Subtitle = "Height above the target while farming.",
+        Subtitle = string.format("Height above the target: %d studs.", FarmFeatures.hoverHeight),
     })
     hoverHeightRow:Right():Slider({
         Minimum = 100,
@@ -1936,13 +1954,14 @@ do
         Value = FarmFeatures.hoverHeight,
         ValueChanged = function(_, value)
             FarmFeatures.hoverHeight = value
+            hoverHeightTitle.Subtitle = string.format("Height above the target: %d studs.", math.floor(value + 0.5))
         end,
     })
 
     local hoverSpeedRow = movementSettingsForm:Row({ SearchIndex = "Hover speed" })
-    hoverSpeedRow:Left():TitleStack({
+    local hoverSpeedTitle = hoverSpeedRow:Left():TitleStack({
         Title = "Hover Speed",
-        Subtitle = "Movement speed toward the target.",
+        Subtitle = string.format("Movement speed: %d studs/s.", FarmFeatures.hoverSpeed),
     })
     hoverSpeedRow:Right():Slider({
         Minimum = 250,
@@ -1950,13 +1969,14 @@ do
         Value = FarmFeatures.hoverSpeed,
         ValueChanged = function(_, value)
             FarmFeatures.hoverSpeed = value
+            hoverSpeedTitle.Subtitle = string.format("Movement speed: %d studs/s.", math.floor(value + 0.5))
         end,
     })
 
     local waitBeforeFarmRow = movementSettingsForm:Row({ SearchIndex = "Wait before farming" })
-    waitBeforeFarmRow:Left():TitleStack({
+    local waitBeforeFarmTitle = waitBeforeFarmRow:Left():TitleStack({
         Title = "Wait Before Farming",
-        Subtitle = "Delay before Auto Farm starts, in seconds.",
+        Subtitle = string.format("Start delay: %ds.", FarmFeatures.waitBeforeFarming),
     })
     waitBeforeFarmRow:Right():Slider({
         Minimum = 5,
@@ -1964,6 +1984,7 @@ do
         Value = FarmFeatures.waitBeforeFarming,
         ValueChanged = function(_, value)
             FarmFeatures.waitBeforeFarming = value
+            waitBeforeFarmTitle.Subtitle = string.format("Start delay: %ds.", math.floor(value + 0.5))
         end,
     })
 end
