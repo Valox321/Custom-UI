@@ -276,7 +276,7 @@ local function saveConfig(name)
         local ok, value = pcall(function()
             return control.Value
         end)
-        if ok and (type(value) == "string" or type(value) == "number" or type(value) == "boolean") then
+        if ok and (type(value) == "string" or type(value) == "number" or type(value) == "boolean" or type(value) == "table") then
             values[key] = value
         end
     end
