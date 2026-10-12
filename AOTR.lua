@@ -1160,7 +1160,7 @@ function FarmFeatures.shouldHoldForSafetyTimer()
                 end
             end
         end
-        if remainingTitans == 1 then
+        if remainingTitans > 0 and remainingTitans <= 2 then
             return true, minimumTime - seconds
         end
     end
