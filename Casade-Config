@@ -72,8 +72,8 @@ local function collectAutomaticControls()
             end
         end
 
-        local inConfigTab = table.find(nodePath, "Tab:Config") ~= nil
-        if valueComponentTypes[node.Type] and node.Object and not inConfigTab then
+        local inConfigurationManager = table.find(nodePath, "PageSection:Configuration Manager") ~= nil
+        if valueComponentTypes[node.Type] and node.Object and not inConfigurationManager then
             local key = table.concat(nodePath, "/") .. "/" .. node.Type
             controls[key] = node.Object
 
@@ -140,11 +140,10 @@ local function configFilePath(name)
     return configFolder .. "/" .. name .. ".json"
 end
 
-local configForm = Config:Form()
-configForm:PageSection({
+local configForm = Config:PageSection({
     Title = "Configuration Manager",
     Subtitle = "Save your settings and restore them later.",
-})
+}):Form()
 
 local nameRow = configForm:Row()
 nameRow:Left():TitleStack({
