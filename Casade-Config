@@ -1,4 +1,4 @@
-return function(Config, Services)
+local Config, Services = ...
 -- Cascade-compatible config storage. The linked Obsidian SaveManager expects
 -- Obsidian's Library.Options/Toggles and cannot be attached to Cascade tabs.
 local configFolder = "AOTR/Configs"
@@ -289,8 +289,6 @@ if pcall(ensureConfigFolder) then
         end
     end
 end
-
-    return {
-        Register = registerConfigControl,
-    }
-end
+return {
+    Register = registerConfigControl,
+}
