@@ -56,6 +56,7 @@ local autoUpgradeGearEnabled = false
 local autoUpgradeGearRunId = 0
 local autoUpgradeGearToggle
 local autoFarmToggle
+local windowBodyInstance
 local autoLobbyRewardConnection
 local SoloOnly = {
     enabled = false,
@@ -110,6 +111,18 @@ local FarmFeatures = {
     movementTarget = nil,
     movementNape = nil,
     movementHumanoid = nil,
+    noclipRunId = 0,
+    noclipCharacterConnection = nil,
+    noclipDescendantConnection = nil,
+    noclipParts = {},
+}
+local AutoRetry = {
+    enabled = false,
+    runId = 0,
+    busy = false,
+    lastHandledAt = 0,
+    rewardChangedConnection = nil,
+    forceEndChangedConnection = nil,
 }
 local CombatFeatures = {
     autoGrabEscapeEnabled = true,
@@ -488,6 +501,28 @@ function CombatFeatures.getNearestEscapeNape()
         end
     end
     return nearestNape
+end
+
+function CombatFeatures.getAstraFarmTargets()
+    local titans = workspace:FindFirstChild("Titans")
+    local targets = {}
+    if not titans then
+        return targets
+    end
+
+    for _, titan in ipairs(titans:GetChildren()) do
+        if not titan:GetAttribute("Killed") then
+            local hitboxes = titan:FindFirstChild("Hitboxes")
+            local hit = hitboxes and hitboxes:FindFirstChild("Hit")
+            local nape = hit and hit:FindFirstChild("Nape")
+            local fake = titan:FindFirstChild("Fake")
+            local collision = fake and fake:FindFirstChild("Collision")
+            if nape and nape:IsA("BasePart") and not (collision and not collision.CanCollide) then
+                table.insert(targets, nape)
+            end
+        end
+    end
+    return targets
 end
 
 function CombatFeatures.getEscapeButtonsFolder()
@@ -1113,15 +1148,100 @@ function FarmFeatures.clearMovement()
     end
 end
 
+function FarmFeatures.disablePartCollision(part)
+    if not part or not part:IsA("BasePart") then
+        return
+    end
+    if FarmFeatures.noclipParts[part] == nil then
+        FarmFeatures.noclipParts[part] = part.CanCollide
+    end
+    if part.CanCollide then
+        part.CanCollide = false
+    end
+end
+
+function FarmFeatures.startNoclip(runId)
+    FarmFeatures.noclipRunId += 1
+    local noclipRunId = FarmFeatures.noclipRunId
+    if FarmFeatures.noclipDescendantConnection then
+        FarmFeatures.noclipDescendantConnection:Disconnect()
+        FarmFeatures.noclipDescendantConnection = nil
+    end
+    if FarmFeatures.noclipCharacterConnection then
+        FarmFeatures.noclipCharacterConnection:Disconnect()
+    end
+
+    local function applyToCharacter(character)
+        if not character or not FarmFeatures.isActive(runId) then
+            return
+        end
+        if FarmFeatures.noclipDescendantConnection then
+            FarmFeatures.noclipDescendantConnection:Disconnect()
+        end
+        for _, descendant in ipairs(character:GetDescendants()) do
+            FarmFeatures.disablePartCollision(descendant)
+        end
+        FarmFeatures.noclipDescendantConnection = character.DescendantAdded:Connect(function(descendant)
+            if FarmFeatures.isActive(runId) and descendant:IsA("BasePart") then
+                task.defer(function()
+                    if descendant.Parent and FarmFeatures.isActive(runId) then
+                        FarmFeatures.disablePartCollision(descendant)
+                    end
+                end)
+            end
+        end)
+    end
+
+    applyToCharacter(LocalPlayer.Character)
+    FarmFeatures.noclipCharacterConnection = LocalPlayer.CharacterAdded:Connect(applyToCharacter)
+    task.spawn(function()
+        while FarmFeatures.isActive(runId) and FarmFeatures.noclipRunId == noclipRunId do
+            task.wait(0.5)
+            for part in pairs(FarmFeatures.noclipParts) do
+                if part and part.Parent then
+                    pcall(function()
+                        part.CanCollide = false
+                    end)
+                else
+                    FarmFeatures.noclipParts[part] = nil
+                end
+            end
+        end
+    end)
+end
+
+function FarmFeatures.stopNoclip()
+    FarmFeatures.noclipRunId += 1
+    if FarmFeatures.noclipCharacterConnection then
+        FarmFeatures.noclipCharacterConnection:Disconnect()
+        FarmFeatures.noclipCharacterConnection = nil
+    end
+    if FarmFeatures.noclipDescendantConnection then
+        FarmFeatures.noclipDescendantConnection:Disconnect()
+        FarmFeatures.noclipDescendantConnection = nil
+    end
+    for part, originalCanCollide in pairs(FarmFeatures.noclipParts) do
+        if part and part.Parent then
+            pcall(function()
+                part.CanCollide = originalCanCollide
+            end)
+        end
+        FarmFeatures.noclipParts[part] = nil
+    end
+end
+
 function FarmFeatures.shouldHoldForSafetyTimer()
     local mode = workspace:GetAttribute("Type")
     local minimumTime = mode == "Missions" and FarmFeatures.missionSafetyTimer
         or mode == "Raids" and FarmFeatures.raidSafetyTimer
-    local gameSeconds = tonumber(workspace:GetAttribute("Seconds"))
-    if not minimumTime or not gameSeconds then
+    if not minimumTime then
         return false, 0
     end
 
+    local gameSeconds = tonumber(workspace:GetAttribute("Seconds"))
+    if not gameSeconds then
+        return false, 0
+    end
     local now = tick()
     if FarmFeatures.lastSessionSeconds == nil or gameSeconds < FarmFeatures.lastSessionSeconds then
         FarmFeatures.lastSessionSecondsChangedAt = now
@@ -1130,44 +1250,63 @@ function FarmFeatures.shouldHoldForSafetyTimer()
     end
     FarmFeatures.lastSessionSeconds = gameSeconds
 
-    -- Some missions pause the replicated timer while the final Titan is alive.
-    -- Keep the safety countdown moving with wall time during that pause.
-    local seconds = gameSeconds + math.max(0, now - FarmFeatures.lastSessionSecondsChangedAt)
-    if seconds >= minimumTime then
+    -- Track the in-game Seconds attribute, and advance elapsed time locally while
+    -- the game pauses it. Do not use Mahmut's six-second escape here: it permits
+    -- the final hit before the configured mission timer has elapsed.
+    local elapsedSeconds = gameSeconds
+        + math.max(0, now - FarmFeatures.lastSessionSecondsChangedAt)
+    local remainingTime = minimumTime - elapsedSeconds
+    if remainingTime <= 0 then
         return false, 0
     end
 
-    local titans = workspace:FindFirstChild("Titans")
-    if titans then
-        local remainingTitans = 0
-        for _, titan in ipairs(titans:GetChildren()) do
-            local humanoid = titan:IsA("Model") and titan:FindFirstChildOfClass("Humanoid")
-            local state = titan:GetAttribute("State")
-            if humanoid and humanoid.Health > 0 and state ~= nil
-                and state ~= "Roar" and state ~= "HeatWave" then
-                local hitboxes = titan:FindFirstChild("Hitboxes")
-                local hit = hitboxes and hitboxes:FindFirstChild("Hit")
-                local nape = hit and hit:FindFirstChild("Nape")
-                if not nape then
-                    local hitFolder = titan:FindFirstChild("Hit", true)
-                    nape = hitFolder and hitFolder:FindFirstChild("Nape")
-                end
-                if nape and nape:IsA("BasePart") then
-                    remainingTitans += 1
-                    if remainingTitans > 1 then
+    if mode == "Missions" then
+        local finalObjectiveTarget = false
+        local hasObjectiveProgress = false
+        local objectives = Services.ReplicatedStorage:FindFirstChild("Objectives")
+        if objectives then
+            local objectiveNames = {
+                Slay = true,
+                Kill = true,
+                Defend = true,
+                Protect = true,
+                Guard = true,
+                Protect_HQ = true,
+            }
+            local objectiveName = workspace:GetAttribute("Objective")
+            local objective = objectiveNames[objectiveName]
+                and objectives:FindFirstChild(objectiveName)
+                or nil
+            if not objective then
+                for _, candidate in ipairs(objectives:GetChildren()) do
+                    if objectiveNames[candidate.Name] then
+                        objective = candidate
                         break
                     end
                 end
             end
+            if objective then
+                local progress = tonumber(objective.Value) or 0
+                local requirement = tonumber(objective:GetAttribute("Requirement")) or 0
+                hasObjectiveProgress = requirement > 1
+                local objectiveRequiresKills = objective.Name == "Slay" or objective.Name == "Kill"
+                finalObjectiveTarget = objectiveRequiresKills
+                    and requirement > 1
+                    and progress >= requirement - 1
+            end
         end
-        if remainingTitans > 0 and remainingTitans <= 2 then
-            return true, minimumTime - seconds
-        end
+
+        -- Match Mahmut's objective gate: hold attacks when only one kill remains.
+        -- Use Astra's one-Nape check only when objective progress is unavailable.
+        local isFinalTarget = hasObjectiveProgress
+            and finalObjectiveTarget
+            or not hasObjectiveProgress and #CombatFeatures.getAstraFarmTargets() == 1
+        return isFinalTarget, math.max(0, remainingTime)
     end
 
     local objectives = Services.ReplicatedStorage:FindFirstChild("Objectives")
     if not objectives then
-        return false, minimumTime - seconds
+        return false, remainingTime
     end
 
     local objectiveName = workspace:GetAttribute("Objective")
@@ -1187,22 +1326,22 @@ function FarmFeatures.shouldHoldForSafetyTimer()
         end
     end
     if not selectedObjective then
-        return false, minimumTime - seconds
+        return false, remainingTime
     end
 
     if not selectedObjective:IsA("ValueBase") then
-        return false, minimumTime - seconds
+        return false, remainingTime
     end
 
     local value = tonumber(selectedObjective.Value)
     local requirement = tonumber(selectedObjective:GetAttribute("Requirement"))
     if not value or not requirement or requirement <= 1 then
-        return false, minimumTime - seconds
+        return false, remainingTime
     end
 
     local holdMargin = (selectedObjective.Name == "Protect_HQ" or selectedObjective.Name == "Guard"
         or selectedObjective.Name == "Defend") and 2 or 1
-    return value >= requirement - holdMargin, minimumTime - seconds
+    return value >= requirement - holdMargin, remainingTime
 end
 
 function FarmFeatures.stop()
@@ -1215,6 +1354,7 @@ function FarmFeatures.stop()
     FarmFeatures.movementTarget = nil
     FarmFeatures.movementNape = nil
     FarmFeatures.clearMovement()
+    FarmFeatures.stopNoclip()
     SoloOnly.stop()
     FarmFeatures.setStatus("Idle")
 end
@@ -1297,6 +1437,7 @@ function FarmFeatures.start()
         if not FarmFeatures.isActive(runId) then
             return
         end
+        FarmFeatures.startNoclip(runId)
 
         while FarmFeatures.isActive(runId) do
             task.wait(0.1)
@@ -1307,6 +1448,8 @@ function FarmFeatures.start()
             if not CombatFeatures.isCombatSession() then
                 FarmFeatures.movementTarget = nil
                 FarmFeatures.movementNape = nil
+                FarmFeatures.lastSessionSeconds = nil
+                FarmFeatures.lastSessionSecondsChangedAt = tick()
                 FarmFeatures.soloOnlyCheckedForSession = false
                 FarmFeatures.setStatus("Waiting for a combat session")
                 continue
@@ -1322,6 +1465,8 @@ function FarmFeatures.start()
             if workspace:GetAttribute("Rewarded") or workspace:GetAttribute("Force_End") then
                 FarmFeatures.movementTarget = nil
                 FarmFeatures.movementNape = nil
+                FarmFeatures.lastSessionSeconds = nil
+                FarmFeatures.lastSessionSecondsChangedAt = tick()
                 FarmFeatures.setStatus("Session complete; waiting for the next round")
                 continue
             end
@@ -1348,7 +1493,18 @@ function FarmFeatures.start()
                 continue
             end
 
-            if tick() - FarmFeatures.lastAttackTime >= 0.3 then
+            local titan = nape.Parent and nape.Parent.Parent and nape.Parent.Parent.Parent
+            local titanState = titan and titan:GetAttribute("State")
+            local attackable = titan
+                and not titan:GetAttribute("Killed")
+                and titan:GetAttribute("Dead") ~= true
+                and titanState ~= nil
+                and titanState ~= "Roar"
+                and titanState ~= "HeatWave"
+            local attackRange = (tonumber(FarmFeatures.hoverHeight) or 200) + 50
+            if attackable
+                and (rootPart.Position - nape.Position).Magnitude <= attackRange
+                and tick() - FarmFeatures.lastAttackTime >= 0.5 then
                 FarmFeatures.lastAttackTime = tick()
                 CombatFeatures.sendPost("Attacks", "Slash", true)
                 CombatFeatures.sendPost(
@@ -1358,6 +1514,7 @@ function FarmFeatures.start()
                     math.random(200, 400),
                     math.random(100, 800) / 1000
                 )
+                CombatFeatures.sendPost("Attacks", "Slash", false)
             end
 
             local mode = workspace:GetAttribute("Type") or "Combat"
@@ -1400,6 +1557,113 @@ function FarmFeatures.setAutoExecute(value)
     end
 
     warn("[AOTR] Auto Execute queued; AOTR.lua will reload after the next teleport.")
+end
+
+local function getAutoRetryRewardScreen()
+    local interface = PlayerGui:FindFirstChild("Interface")
+    local rewards = interface and interface:FindFirstChild("Rewards")
+    return rewards and rewards.Visible and rewards or nil
+end
+
+local function clickAutoRetryButton(runId)
+    local rewards = PlayerGui:FindFirstChild("Interface")
+        and PlayerGui.Interface:FindFirstChild("Rewards")
+    local current = rewards
+    for _, childName in ipairs({ "Main", "Info", "Main", "Buttons", "Retry" }) do
+        current = current and current:FindFirstChild(childName)
+    end
+    local retryButton = current
+    if not retryButton or not retryButton:IsA("GuiButton") then
+        return false
+    end
+    if not AutoRetry.enabled or AutoRetry.runId ~= runId or not FarmFeatures.enabled then
+        return false
+    end
+
+    Services.GuiService.SelectedObject = retryButton
+    task.wait(0.1)
+    if not AutoRetry.enabled or AutoRetry.runId ~= runId or not retryButton.Parent then
+        Services.GuiService.SelectedObject = nil
+        return false
+    end
+    Services.VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+    task.wait(0.1)
+    Services.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+    Services.GuiService.SelectedObject = nil
+    return true
+end
+
+local function clickRetrySure(runId)
+    for _ = 1, 3 do
+        if not AutoRetry.enabled or AutoRetry.runId ~= runId or not FarmFeatures.enabled then
+            return false
+        end
+        task.wait(1)
+        clickAutoRetryButton(runId)
+        local deadline = tick() + 8
+        while tick() < deadline do
+            if not AutoRetry.enabled or AutoRetry.runId ~= runId or not FarmFeatures.enabled then
+                return false
+            end
+            if not getAutoRetryRewardScreen() then
+                return true
+            end
+            task.wait(0.25)
+        end
+    end
+    warn("[AOTR] Auto Retry could not close the rewards screen after 3 attempts.")
+    return false
+end
+
+local function requestAutoRetry()
+    if not AutoRetry.enabled or not FarmFeatures.enabled or AutoRetry.busy
+        or not CombatFeatures.isCombatSession() or not getAutoRetryRewardScreen() then
+        return
+    end
+    local now = tick()
+    if now - AutoRetry.lastHandledAt < 3 then
+        return
+    end
+    AutoRetry.lastHandledAt = now
+    AutoRetry.busy = true
+    local runId = AutoRetry.runId
+    task.spawn(function()
+        clickRetrySure(runId)
+        if AutoRetry.runId == runId then
+            AutoRetry.busy = false
+        end
+    end)
+end
+
+AutoRetry.rewardChangedConnection = workspace:GetAttributeChangedSignal("Rewarded"):Connect(function()
+    if workspace:GetAttribute("Rewarded") == true then
+        task.delay(0.5, requestAutoRetry)
+    end
+end)
+AutoRetry.forceEndChangedConnection = workspace:GetAttributeChangedSignal("Force_End"):Connect(function()
+    if workspace:GetAttribute("Force_End") == true then
+        task.delay(0.5, requestAutoRetry)
+    end
+end)
+
+local function startAutoRetryUiWatch()
+    task.spawn(function()
+    local previousVisible = false
+    while windowBodyInstance and windowBodyInstance.Parent do
+        task.wait(0.5)
+        local visible = getAutoRetryRewardScreen() ~= nil
+        if visible and not previousVisible then
+            task.delay(0.6, requestAutoRetry)
+        end
+        previousVisible = visible
+        end
+    end)
+end
+
+local function setAutoRetryEnabled(value)
+    AutoRetry.enabled = value
+    AutoRetry.runId += 1
+    AutoRetry.busy = false
 end
 
 local function updateAutoLobbySubtitle()
@@ -2363,7 +2627,8 @@ local window = App:Window({
 
 local mouseInput = Services.UserInputService
 local previousMouseIconEnabled = mouseInput.MouseIconEnabled
-local windowBodyInstance = window.Structures.Body.__instance
+windowBodyInstance = window.Structures.Body.__instance
+startAutoRetryUiWatch()
 local windowPillInstance = App.Structures.WindowPill.__instance
 local mouseBehaviorBeforeUi = {
     value = nil,
@@ -2436,6 +2701,12 @@ windowBodyInstance.Destroying:Connect(function()
     if autoLobbyRewardConnection then
         autoLobbyRewardConnection:Disconnect()
     end
+    if AutoRetry.rewardChangedConnection then
+        AutoRetry.rewardChangedConnection:Disconnect()
+    end
+    if AutoRetry.forceEndChangedConnection then
+        AutoRetry.forceEndChangedConnection:Disconnect()
+    end
     if mouseBehaviorBeforeUi.managed then
         mouseInput.MouseIconEnabled = previousMouseIconEnabled
     end
@@ -2490,6 +2761,18 @@ do
         Value = false,
         ValueChanged = function(_, value)
             FarmFeatures.setAutoExecute(value)
+        end,
+    })
+
+    local autoRetryRow = autoFarmForm:Row({ SearchIndex = "Auto Retry" })
+    autoRetryRow:Left():TitleStack({
+        Title = "Auto Retry",
+        Subtitle = "Automatically press Retry after a mission or raid ends.",
+    })
+    autoRetryRow:Right():Toggle({
+        Value = false,
+        ValueChanged = function(_, value)
+            setAutoRetryEnabled(value)
         end,
     })
 end
@@ -2592,7 +2875,7 @@ do
     local missionTimerRow = safetyForm:Row({ SearchIndex = "Mission safety timer" })
     local missionTimerTitle = missionTimerRow:Left():TitleStack({
         Title = "Mission Safety Timer",
-        Subtitle = string.format("Minimum mission time: %ds.", FarmFeatures.missionSafetyTimer),
+        Subtitle = string.format("Wait before defeating the final Titan: %ds.", FarmFeatures.missionSafetyTimer),
     })
     missionTimerRow:Right():Slider({
         Minimum = 40,
@@ -2600,7 +2883,7 @@ do
         Value = FarmFeatures.missionSafetyTimer,
         ValueChanged = function(_, value)
             FarmFeatures.missionSafetyTimer = value
-            missionTimerTitle.Subtitle = string.format("Minimum mission time: %ds.", math.floor(value + 0.5))
+            missionTimerTitle.Subtitle = string.format("Wait before defeating the final Titan: %ds.", math.floor(value + 0.5))
         end,
     })
 
