@@ -65,10 +65,11 @@ configRow:Left():TitleStack({
 local configList = configRow:Right():PullDownButton({
     Label = "Select configuration",
     Options = {},
-    ValueChanged = function(_, selectedIndex)
-        selectedConfigName = savedConfigNames[selectedIndex]
+    ValueChanged = function(self, selectedIndex)
+        selectedConfigName = self.Options[selectedIndex]
         if selectedConfigName then
             configNameField.Value = selectedConfigName
+            self.Label = selectedConfigName
         end
     end,
 })
@@ -101,6 +102,7 @@ local function refreshConfigList()
     end
 
     selectedConfigName = nil
+    configList.Label = "Select configuration"
 end
 
 local function readConfig(name)
