@@ -1,1 +1,296 @@
+return function(Config, Services)
+-- Cascade-compatible config storage. The linked Obsidian SaveManager expects
+-- Obsidian's Library.Options/Toggles and cannot be attached to Cascade tabs.
+local configFolder = "AOTR/Configs"
+local autoloadFile = configFolder .. "/autoload.txt"
+local configControls = {}
+local pendingConfigValues = {}
+local selectedConfigName
+local savedConfigNames = {}
 
+local function registerConfigControl(key, control)
+    configControls[key] = control
+
+    local savedValue = pendingConfigValues[key]
+    if savedValue ~= nil then
+        pcall(function()
+            control.Value = savedValue
+        end)
+    end
+end
+
+local function ensureConfigFolder()
+    if type(makefolder) ~= "function" or type(isfolder) ~= "function" then
+        return false, "Executor file APIs are unavailable"
+    end
+
+    for _, folder in ipairs({ "AOTR", configFolder }) do
+        if not isfolder(folder) then
+            makefolder(folder)
+        end
+    end
+
+    return true
+end
+
+local function configFilePath(name)
+    if type(name) ~= "string" or not name:match("^[%w _%-]+$") then
+        return nil
+    end
+
+    return configFolder .. "/" .. name .. ".json"
+end
+
+local configForm = Config:Form()
+configForm:PageSection({
+    Title = "Configuration Manager",
+    Subtitle = "Save your settings and restore them later.",
+})
+
+local nameRow = configForm:Row()
+nameRow:Left():TitleStack({
+    Title = "Configuration name",
+    Subtitle = "The name used for the saved file.",
+})
+local configNameField = nameRow:Right():TextField({
+    Value = "default",
+    Placeholder = "Configuration name",
+})
+
+local configRow = configForm:Row()
+configRow:Left():TitleStack({
+    Title = "Saved configurations",
+    Subtitle = "Select a configuration to load, delete, or use at startup.",
+})
+local configList = configRow:Right():PullDownButton({
+    Label = "Select configuration",
+    Options = {},
+    ValueChanged = function(_, selectedIndex)
+        selectedConfigName = savedConfigNames[selectedIndex]
+        if selectedConfigName then
+            configNameField.Value = selectedConfigName
+        end
+    end,
+})
+
+local function refreshConfigList()
+    savedConfigNames = {}
+
+    if type(listfiles) == "function" and type(isfile) == "function" then
+        local ok, files = pcall(listfiles, configFolder)
+        if ok and type(files) == "table" then
+            for _, filePath in ipairs(files) do
+                if type(filePath) == "string" then
+                    local name = filePath:match("([^/\\]+)%.json$")
+                    if name then
+                        table.insert(savedConfigNames, name)
+                    end
+                end
+            end
+        end
+    end
+
+    table.sort(savedConfigNames)
+
+    while #(configList.Options or {}) > 0 do
+        configList:Remove(#configList.Options)
+    end
+
+    for _, name in ipairs(savedConfigNames) do
+        configList:Option(name)
+    end
+
+    selectedConfigName = nil
+end
+
+local function readConfig(name)
+    local path = configFilePath(name)
+    if not path then
+        return false, "Config name may only contain letters, numbers, spaces, _ and -"
+    end
+    if type(readfile) ~= "function" or type(isfile) ~= "function" or not isfile(path) then
+        return false, "Config file was not found"
+    end
+
+    local ok, content = pcall(readfile, path)
+    if not ok then
+        return false, "Could not read config file"
+    end
+
+    local decoded, data = pcall(function()
+        return Services.HttpService:JSONDecode(content)
+    end)
+    if not decoded or type(data) ~= "table" then
+        return false, "Config file contains invalid JSON"
+    end
+
+    pendingConfigValues = data
+    for key, control in pairs(configControls) do
+        local value = data[key]
+        if value ~= nil then
+            pcall(function()
+                control.Value = value
+            end)
+        end
+    end
+
+    return true
+end
+
+local function saveConfig(name)
+    local path = configFilePath(name)
+    if not path then
+        return false, "Config name may only contain letters, numbers, spaces, _ and -"
+    end
+    if type(writefile) ~= "function" then
+        return false, "Executor writefile API is unavailable"
+    end
+
+    local folderCallSucceeded, folderCreated, folderError = pcall(ensureConfigFolder)
+    if not folderCallSucceeded or not folderCreated then
+        return false, tostring(folderError)
+    end
+
+    local values = {}
+    for key, control in pairs(configControls) do
+        local ok, value = pcall(function()
+            return control.Value
+        end)
+        if ok and (type(value) == "string" or type(value) == "number" or type(value) == "boolean") then
+            values[key] = value
+        end
+    end
+
+    local encoded, contents = pcall(function()
+        return Services.HttpService:JSONEncode(values)
+    end)
+    if not encoded then
+        return false, "Could not encode config"
+    end
+
+    local wrote, writeError = pcall(writefile, path, contents)
+    if not wrote then
+        return false, tostring(writeError)
+    end
+
+    return true
+end
+
+local statusLabel = configForm:Row():Left():Label({
+    Text = "Ready",
+})
+
+local function reportConfigResult(action, success, detail)
+    local message = success and (action .. " completed") or (action .. " failed: " .. tostring(detail))
+    statusLabel.Text = message
+    print("[AOTR Config] " .. message)
+    if not success then
+        warn("[AOTR Config] " .. tostring(detail))
+    end
+end
+
+local function addConfigButton(row, label, callback)
+    row:Right():Button({
+        Label = label,
+        Pushed = callback,
+    })
+end
+
+local saveLoadRow = configForm:Row()
+saveLoadRow:Left():TitleStack({
+    Title = "Save or load",
+    Subtitle = "Save the current values or load the selected configuration.",
+})
+addConfigButton(saveLoadRow, "Save", function()
+    local name = configNameField.Value
+    local success, detail = saveConfig(name)
+    if success then
+        refreshConfigList()
+    end
+    reportConfigResult("Save", success, detail)
+end)
+
+addConfigButton(saveLoadRow, "Load", function()
+    local name = selectedConfigName or configNameField.Value
+    local success, detail = readConfig(name)
+    reportConfigResult("Load", success, detail)
+end)
+
+local manageRow = configForm:Row()
+manageRow:Left():TitleStack({
+    Title = "Manage configurations",
+    Subtitle = "Refresh the list or delete the selected configuration.",
+})
+addConfigButton(manageRow, "Delete", function()
+    local name = selectedConfigName or configNameField.Value
+    local path = configFilePath(name)
+    if not path then
+        reportConfigResult("Delete", false, "Invalid configuration name")
+        return
+    end
+    if type(delfile) ~= "function" or type(isfile) ~= "function" or not isfile(path) then
+        reportConfigResult("Delete", false, "Configuration file not found")
+        return
+    end
+
+    local success, detail = pcall(delfile, path)
+    if success then
+        refreshConfigList()
+    end
+    reportConfigResult("Delete", success, detail)
+end)
+
+addConfigButton(manageRow, "Refresh", refreshConfigList)
+
+local autoloadRow = configForm:Row()
+autoloadRow:Left():TitleStack({
+    Title = "Startup configuration",
+    Subtitle = "Choose a configuration to load automatically on startup.",
+})
+addConfigButton(autoloadRow, "Set autoload", function()
+    local name = selectedConfigName or configNameField.Value
+    if not configFilePath(name) then
+        reportConfigResult("Set autoload", false, "Invalid configuration name")
+        return
+    end
+    if type(writefile) ~= "function" then
+        reportConfigResult("Set autoload", false, "Executor writefile API is unavailable")
+        return
+    end
+
+    local folderCallSucceeded, folderCreated, folderError = pcall(ensureConfigFolder)
+    if not folderCallSucceeded or not folderCreated then
+        reportConfigResult("Set autoload", false, folderError)
+        return
+    end
+
+    local success, detail = pcall(writefile, autoloadFile, name)
+    reportConfigResult("Set autoload", success, detail)
+end)
+
+addConfigButton(autoloadRow, "Reset", function()
+    if type(delfile) ~= "function" or type(isfile) ~= "function" or not isfile(autoloadFile) then
+        reportConfigResult("Reset autoload", false, "No autoload configuration is set")
+        return
+    end
+
+    local success, detail = pcall(delfile, autoloadFile)
+    reportConfigResult("Reset autoload", success, detail)
+end)
+
+if pcall(ensureConfigFolder) then
+    refreshConfigList()
+
+    if type(isfile) == "function" and type(readfile) == "function" and isfile(autoloadFile) then
+        local readOk, name = pcall(readfile, autoloadFile)
+        if readOk and type(name) == "string" and name ~= "" then
+            local loadOk, loadError = readConfig(name)
+            reportConfigResult("Autoload", loadOk, loadError)
+        end
+    end
+end
+
+    return {
+        Register = registerConfigControl,
+    }
+end
