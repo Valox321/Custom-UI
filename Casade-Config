@@ -365,10 +365,13 @@ end)
 addConfigButton(manageRow, "Refresh", refreshConfigList)
 
 local autoloadRow = configForm:Row()
-autoloadRow:Left():TitleStack({
+local autoloadTitleStack = autoloadRow:Left():TitleStack({
     Title = "Startup configuration",
-    Subtitle = "Choose a configuration to load automatically on startup.",
+    Subtitle = "No startup configuration set.",
 })
+local function updateAutoloadDescription(name)
+    autoloadTitleStack.Subtitle = name and ("Autoload configuration: " .. name) or "No startup configuration set."
+end
 addConfigButton(autoloadRow, "Set autoload", function()
     local name = selectedConfigName or configNameField.Value
     if not configFilePath(name) then
@@ -387,7 +390,10 @@ addConfigButton(autoloadRow, "Set autoload", function()
     end
 
     local success, detail = pcall(writefile, autoloadFile, name)
-    reportConfigResult("Set autoload", success, detail)
+    if success then
+        updateAutoloadDescription(name)
+    end
+    reportConfigResult("Autoload set to " .. name, success, detail)
 end)
 
 addConfigButton(autoloadRow, "Reset", function()
@@ -397,6 +403,9 @@ addConfigButton(autoloadRow, "Reset", function()
     end
 
     local success, detail = pcall(delfile, autoloadFile)
+    if success then
+        updateAutoloadDescription(nil)
+    end
     reportConfigResult("Reset autoload", success, detail)
 end)
 
@@ -406,8 +415,9 @@ if pcall(ensureConfigFolder) then
     if type(isfile) == "function" and type(readfile) == "function" and isfile(autoloadFile) then
         local readOk, name = pcall(readfile, autoloadFile)
         if readOk and type(name) == "string" and name ~= "" then
+            updateAutoloadDescription(name)
             local loadOk, loadError = readConfig(name)
-            reportConfigResult("Autoload", loadOk, loadError)
+            reportConfigResult("Autoloaded " .. name, loadOk, loadError)
         end
     end
 end
