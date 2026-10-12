@@ -1,4 +1,4 @@
-local Config, Services = ...
+local Config, Services, Recorder = ...
 -- Cascade-compatible config storage. The linked Obsidian SaveManager expects
 -- Obsidian's Library.Options/Toggles and cannot be attached to Cascade tabs.
 local configFolder = "AOTR/Configs"
@@ -7,6 +7,102 @@ local configControls = {}
 local pendingConfigValues = {}
 local selectedConfigName
 local savedConfigNames = {}
+
+local valueComponentTypes = {
+    Toggle = true,
+    TextField = true,
+    KeybindField = true,
+    Slider = true,
+    Stepper = true,
+    RadioButtonGroup = true,
+    PopUpButton = true,
+    PullDownButton = true,
+}
+
+local function componentTitle(node)
+    local ok, title = pcall(function()
+        return node.Object.Title
+    end)
+    if ok and type(title) == "string" and title ~= "" then
+        return title
+    end
+    return nil
+end
+
+local function appendPath(path, segment)
+    local result = table.clone(path)
+    table.insert(result, segment)
+    return result
+end
+
+local function collectAutomaticControls()
+    local controls = {}
+    local aliases = {}
+    local aliasCollisions = {}
+
+    if type(Recorder) ~= "table" or type(Recorder.Root) ~= "table" then
+        return controls, aliases
+    end
+
+    local function visit(node, path, rowTitle)
+        local nodePath = path
+        local currentRowTitle = rowTitle
+
+        if node.Type == "Tab" then
+            nodePath = appendPath(path, "Tab:" .. tostring(componentTitle(node) or ""))
+            currentRowTitle = nil
+        elseif node.Type == "Section" or node.Type == "PageSection" then
+            nodePath = appendPath(path, node.Type .. ":" .. tostring(componentTitle(node) or ""))
+            currentRowTitle = nil
+        elseif node.Type == "Row" then
+            currentRowTitle = nil
+            for _, child in ipairs(node.Children) do
+                if child.Type == "TitleStack" then
+                    currentRowTitle = componentTitle(child)
+                    if currentRowTitle then
+                        break
+                    end
+                end
+            end
+            if currentRowTitle then
+                nodePath = appendPath(path, "Row:" .. currentRowTitle)
+            end
+        end
+
+        local inConfigTab = table.find(nodePath, "Tab:Config") ~= nil
+        if valueComponentTypes[node.Type] and node.Object and not inConfigTab then
+            local key = table.concat(nodePath, "/") .. "/" .. node.Type
+            controls[key] = node.Object
+
+            if currentRowTitle then
+                local alias = currentRowTitle:gsub("[^%w]", "")
+                if alias ~= "" then
+                    if aliases[alias] then
+                        aliases[alias] = nil
+                        aliasCollisions[alias] = true
+                    elseif not aliasCollisions[alias] then
+                        aliases[alias] = key
+                    end
+                end
+            end
+        end
+
+        for _, child in ipairs(node.Children or {}) do
+            visit(child, nodePath, currentRowTitle)
+        end
+    end
+
+    visit(Recorder.Root, {}, nil)
+    return controls, aliases
+end
+
+local function getConfigControls()
+    local controls = collectAutomaticControls()
+    for key, control in pairs(configControls) do
+        controls[key] = control
+    end
+    return controls
+end
 
 local function registerConfigControl(key, control)
     configControls[key] = control
@@ -127,8 +223,20 @@ local function readConfig(name)
     end
 
     pendingConfigValues = data
+    local controls, aliases = collectAutomaticControls()
     for key, control in pairs(configControls) do
+        controls[key] = control
+    end
+    for key, control in pairs(controls) do
         local value = data[key]
+        if value == nil then
+            for alias, aliasedKey in pairs(aliases) do
+                if aliasedKey == key then
+                    value = data[alias]
+                    break
+                end
+            end
+        end
         if value ~= nil then
             pcall(function()
                 control.Value = value
@@ -154,7 +262,7 @@ local function saveConfig(name)
     end
 
     local values = {}
-    for key, control in pairs(configControls) do
+    for key, control in pairs(getConfigControls()) do
         local ok, value = pcall(function()
             return control.Value
         end)
