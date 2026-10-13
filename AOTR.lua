@@ -26,6 +26,49 @@ local Humanoid = Character:WaitForChild("Humanoid")
 local HumanoidRootPart = Character:WaitForChild("HumanoidRootPart")
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 
+do
+    local executionEnvironment = _G
+    if type(getgenv) == "function" then
+        local succeeded, environment = pcall(getgenv)
+        if succeeded and type(environment) == "table" then
+            executionEnvironment = environment
+        end
+    end
+    local previousScreenGui = executionEnvironment.__AOTRScreenGui
+    if not previousScreenGui or not previousScreenGui.Parent then
+        local roots = { PlayerGui }
+        local coreGuiSucceeded, coreGui = pcall(function()
+            return game:GetService("CoreGui")
+        end)
+        if coreGuiSucceeded and coreGui then
+            roots[#roots + 1] = coreGui
+        end
+        for _, root in ipairs(roots) do
+            for _, guiObject in ipairs(root:GetDescendants()) do
+                if guiObject:IsA("TextLabel") and guiObject.Text == "AOTR - Revolution" then
+                    local ancestor = guiObject
+                    while ancestor and not ancestor:IsA("ScreenGui") do
+                        ancestor = ancestor.Parent
+                    end
+                    if ancestor then
+                        previousScreenGui = ancestor
+                        break
+                    end
+                end
+            end
+            if previousScreenGui then
+                break
+            end
+        end
+    end
+    if previousScreenGui and previousScreenGui.Parent then
+        pcall(function()
+            previousScreenGui:Destroy()
+        end)
+    end
+    executionEnvironment.__AOTRScreenGui = nil
+end
+
 local cascade = loadstring(game:HttpGetAsync("https://github.com/cascadeui/Cascade/releases/latest/download/dist.luau"))()
 
 local App = cascade.New({})
@@ -100,6 +143,8 @@ local FarmFeatures = {
     waitBeforeFarming = 5,
     missionSafetyTimer = 120,
     raidSafetyTimer = 300,
+    raidBossHpHold = true,
+    raidBossHpThreshold = 25,
     autoFailsafeEnabled = false,
     autoDieAtStreakEnabled = false,
     dieAtStreakCount = 1000,
@@ -112,6 +157,11 @@ local FarmFeatures = {
     lastAttackTime = 0,
     lastSessionSeconds = nil,
     lastSessionSecondsChangedAt = 0,
+    raidSafetySecondsVal = nil,
+    raidSafetySecondsStamp = 0,
+    raidBossHpStamp = 0,
+    raidBossHpPercent = nil,
+    raidBossChipAt = 0,
     soloOnlyCheckedForSession = false,
     movementConnection = nil,
     movementBodyPosition = nil,
@@ -122,6 +172,8 @@ local FarmFeatures = {
     noclipCharacterConnection = nil,
     noclipDescendantConnection = nil,
     noclipParts = {},
+    autoOpenBothChestEnabled = false,
+    autoOpenChestBusy = false,
 }
 local AutoRetry = {
     enabled = false,
@@ -132,6 +184,9 @@ local AutoRetry = {
     forceEndChangedConnection = nil,
 }
 local CombatFeatures = {
+    antiInjuriesEnabled = false,
+    antiInjuriesRunId = 0,
+    infiniteSpearsEnabled = false,
     autoGrabEscapeEnabled = true,
     autoGrabEscapeRunId = 0,
     escapeButtonsFolder = nil,
@@ -147,6 +202,7 @@ local CombatFeatures = {
     fullReloadPendingSince = 0,
     lastRefillSearchTime = 0,
     cachedRefillPart = nil,
+    bossHitboxRotIdx = 0,
 }
 local missionMaps = {
     { Name = "Shiganshina", Objectives = { "Skirmish", "Breach" } },
@@ -477,6 +533,61 @@ function CombatFeatures.sendPost(remoteName, functionName, ...)
     end)
 end
 
+function CombatFeatures.getColossalRaidPhase()
+    local titans = workspace:FindFirstChild("Titans")
+    local colossal = titans and titans:FindFirstChild("Colossal_Titan")
+    local phase = colossal and tonumber(colossal:GetAttribute("Phase"))
+    if phase == 1 or phase == 2 then
+        return phase
+    end
+
+    local objectives = Services.ReplicatedStorage:FindFirstChild("Objectives")
+    if objectives and objectives:FindFirstChild("Defeat_Colossal_Titan") then
+        return 2
+    end
+    if objectives and objectives:FindFirstChild("Stall_Colossal_Titan") then
+        return 1
+    end
+    return 1
+end
+
+function CombatFeatures.getRaidBossNape()
+    if workspace:GetAttribute("Type") ~= "Raids" then
+        return nil
+    end
+
+    local titans = workspace:FindFirstChild("Titans")
+    if not titans then
+        return nil
+    end
+
+    for _, titan in ipairs(titans:GetChildren()) do
+        local isOrdinaryTitan = titan.Name:match("^%x+%-%x+%-%x+%-%x+%-%x+$") ~= nil
+        local isColossalStallPhase = titan.Name == "Colossal_Titan"
+            and CombatFeatures.getColossalRaidPhase() == 1
+        if titan:IsA("Model") and not isOrdinaryTitan and not isColossalStallPhase
+            and titan:FindFirstChildOfClass("Humanoid") and titan:GetAttribute("State") ~= nil
+            and (titan:FindFirstChildOfClass("Humanoid").Health > 0)
+            and not titan:GetAttribute("Killed") and titan:GetAttribute("Dead") ~= true then
+            local hitboxes = titan:FindFirstChild("Hitboxes")
+            local hit = hitboxes and hitboxes:FindFirstChild("Hit")
+            local nape = hit and hit:FindFirstChild("Nape")
+            if not nape then
+                local hitFolder = titan:FindFirstChild("Hit", true)
+                nape = hitFolder and hitFolder:FindFirstChild("Nape")
+            end
+            if nape and nape:IsA("BasePart") then
+                local fake = titan:FindFirstChild("Fake")
+                local collision = fake and fake:FindFirstChild("Collision")
+                if not (collision and not collision.CanCollide) then
+                    return nape
+                end
+            end
+        end
+    end
+    return nil
+end
+
 function CombatFeatures.getNearestEscapeNape()
     local character = LocalPlayer.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -485,10 +596,17 @@ function CombatFeatures.getNearestEscapeNape()
         return nil
     end
 
+    local raidBossNape = CombatFeatures.getRaidBossNape()
+    if raidBossNape and CombatFeatures.isTitanAttackable(CombatFeatures.getTitanFromNape(raidBossNape)) then
+        return raidBossNape
+    end
+
     local nearestNape
     local nearestDistance = math.huge
     for _, titan in ipairs(titans:GetChildren()) do
-        if CombatFeatures.isTitanAttackable(titan) then
+        local skipColossalDuringStall = workspace:GetAttribute("Type") == "Raids"
+            and titan.Name == "Colossal_Titan" and CombatFeatures.getColossalRaidPhase() == 1
+        if not skipColossalDuringStall and CombatFeatures.isTitanAttackable(titan) then
             local hitboxes = titan:FindFirstChild("Hitboxes")
             local hit = hitboxes and hitboxes:FindFirstChild("Hit")
             local nape = hit and hit:FindFirstChild("Nape")
@@ -507,7 +625,7 @@ function CombatFeatures.getNearestEscapeNape()
             end
         end
     end
-    return nearestNape
+    return nearestNape or raidBossNape
 end
 
 function CombatFeatures.getAstraFarmTargets()
@@ -541,6 +659,81 @@ function CombatFeatures.getTitanFromNape(nape)
     return titan and titan.Parent == titans and titan or nil
 end
 
+function CombatFeatures.getNearestSmallTitanNape(position)
+    local titans = workspace:FindFirstChild("Titans")
+    if not titans then
+        return nil, nil
+    end
+
+    local character = LocalPlayer.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    position = position or (rootPart and rootPart.Position)
+    if not position then
+        return nil, nil
+    end
+
+    local nearestNape, nearestTitan
+    local nearestDistance = math.huge
+    for _, titan in ipairs(titans:GetChildren()) do
+        if titan:IsA("Model") and titan.Name:match("^%x+%-%x+%-%x+%-%x+%-%x+$")
+            and CombatFeatures.isTitanAttackable(titan) then
+            local hitboxes = titan:FindFirstChild("Hitboxes")
+            local hit = hitboxes and hitboxes:FindFirstChild("Hit")
+            local nape = hit and hit:FindFirstChild("Nape")
+            if not nape then
+                local hitFolder = titan:FindFirstChild("Hit", true)
+                nape = hitFolder and hitFolder:FindFirstChild("Nape")
+            end
+            if nape and nape:IsA("BasePart") then
+                local distance = (position - nape.Position).Magnitude
+                if distance < nearestDistance then
+                    nearestDistance = distance
+                    nearestNape, nearestTitan = nape, titan
+                end
+            end
+        end
+    end
+    return nearestNape, nearestTitan
+end
+
+function CombatFeatures.getRaidBossHpPercent()
+    local now = tick()
+    if now - FarmFeatures.raidBossHpStamp < 0.4 then
+        return FarmFeatures.raidBossHpPercent
+    end
+    FarmFeatures.raidBossHpStamp = now
+    FarmFeatures.raidBossHpPercent = nil
+
+    local objectiveFolder = workspace:FindFirstChild("Unclimbable")
+    objectiveFolder = objectiveFolder and objectiveFolder:FindFirstChild("Objective")
+    if not objectiveFolder then
+        return nil
+    end
+
+    local bossNames = { "Defend_Eren", "Armored_Boss", "Female_Boss", "Colossal_Boss" }
+    for _, name in ipairs(bossNames) do
+        local boss = objectiveFolder:FindFirstChild(name)
+        if boss then
+            local health = boss:FindFirstChild("Health")
+            local currentHealth = health and health:IsA("NumberValue") and health.Value
+            local maxHealth = health and health:GetAttribute("Max_Health")
+            if not currentHealth then
+                local humanoid = boss:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    currentHealth, maxHealth = humanoid.Health, humanoid.MaxHealth
+                end
+            end
+            if currentHealth and maxHealth and maxHealth > 0 and currentHealth > 0 then
+                local percent = currentHealth / maxHealth * 100
+                if not FarmFeatures.raidBossHpPercent or percent < FarmFeatures.raidBossHpPercent then
+                    FarmFeatures.raidBossHpPercent = percent
+                end
+            end
+        end
+    end
+    return FarmFeatures.raidBossHpPercent
+end
+
 function CombatFeatures.isTitanAttackable(titan)
     if not titan or not titan:IsA("Model") or titan:GetAttribute("Killed")
         or titan:GetAttribute("Dead") == true then
@@ -550,6 +743,48 @@ function CombatFeatures.isTitanAttackable(titan)
     local state = titan:GetAttribute("State")
     return humanoid ~= nil and humanoid.Health > 0
         and state ~= nil and state ~= "Roar" and state ~= "HeatWave"
+end
+
+function CombatFeatures.getFarmSpearPositions(titan, nape, targets)
+    local isRaidBoss = workspace:GetAttribute("Type") == "Raids"
+        and workspace:GetAttribute("Objective") ~= "Stall"
+        and not titan.Name:match("^%x+%-%x+%-%x+%-%x+%-%x+$")
+    if isRaidBoss then
+        local hit = titan:FindFirstChild("Hitboxes")
+        hit = hit and hit:FindFirstChild("Hit")
+        local hitboxes = {}
+        if hit then
+            for _, part in ipairs(hit:GetChildren()) do
+                if part:IsA("BasePart") and part.Name ~= "Nape" then
+                    table.insert(hitboxes, part)
+                end
+            end
+        end
+
+        local hitbox = nape
+        if #hitboxes > 0 then
+            local index = CombatFeatures.bossHitboxRotIdx % #hitboxes + 1
+            hitbox = hitboxes[index]
+            CombatFeatures.bossHitboxRotIdx += 1
+        end
+
+        local basePosition = hitbox.Position
+        local positions = { basePosition }
+        for _ = 2, 5 do
+            table.insert(positions, basePosition + Vector3.new(
+                math.random(-5, 5), math.random(-2, 2), math.random(-5, 5)
+            ))
+        end
+        return positions
+    end
+
+    local positions = {}
+    for _, targetNape in ipairs(targets) do
+        if targetNape.Parent then
+            table.insert(positions, targetNape.Position)
+        end
+    end
+    return positions
 end
 
 function CombatFeatures.attackFarmTarget(nape, rootPart)
@@ -590,6 +825,10 @@ function CombatFeatures.attackFarmTarget(nape, rootPart)
         return true
     end
 
+    if CombatFeatures.fullReloadPending then
+        return false
+    end
+
     local interface = PlayerGui:FindFirstChild("Interface")
     local hud = interface and interface:FindFirstChild("HUD")
     local main = hud and hud:FindFirstChild("Main")
@@ -597,43 +836,23 @@ function CombatFeatures.attackFarmTarget(nape, rootPart)
     local weaponSlot = top and top:FindFirstChild("7")
     local spears = weaponSlot and weaponSlot:FindFirstChild("Spears")
     local spearLabel = spears and spears:FindFirstChild("Spears")
-    local ammoText, maximumText
+    local ammoText
     if spearLabel then
-        ammoText, maximumText = tostring(spearLabel.Text):match("(%d+)%s*/%s*(%d+)")
+        ammoText = tostring(spearLabel.Text):match("(%d+)%s*/%s*(%d+)")
     end
-    local ammo = tonumber(ammoText)
-    local maximum = tonumber(maximumText)
-    if not ammo or ammo <= 0 then
+    local ammo = tonumber(ammoText) or 0
+    if ammo <= 0 and not CombatFeatures.infiniteSpearsEnabled then
         return false
     end
 
+    local spearPositions = CombatFeatures.getFarmSpearPositions(titan, nape, targets)
     task.spawn(function()
-        local function readAmmo()
-            return spearLabel and tonumber(tostring(spearLabel.Text):match("(%d+)")) or 0
-        end
-        local initialAmmo = readAmmo()
-        invokeActorFunction("Spears", "S_Fire", tostring(ammo))
-        if readAmmo() == initialAmmo and maximum then
-            for count = maximum, 1, -1 do
-                local before = readAmmo()
-                invokeActorFunction("Spears", "S_Fire", tostring(count))
-                if readAmmo() < before then
-                    break
-                end
-                task.wait()
-            end
-        end
-
-        local titanName = titan.Name
-        local boss = titanName == "Attack_Titan" or titanName == "Armored_Titan"
-            or titanName == "Female_Titan" or titanName == "Colossal_Titan"
-        local bursts = boss and 40 or 1
-        for _ = 1, bursts do
-            for _, targetNape in ipairs(targets) do
-                if targetNape.Parent then
-                    CombatFeatures.sendPost("Spears", "S_Explode", targetNape.Position)
-                end
-            end
+        local fireCount = ammo > 0 and tostring(math.min(ammo, 8)) or "1"
+        invokeActorFunction("Spears", "S_Fire", fireCount)
+        for _, position in ipairs(spearPositions) do
+            CombatFeatures.sendPost(
+                "Spears", "S_Explode", position, math.random(100, 800) / 1000
+            )
         end
     end)
     return true
@@ -710,6 +929,30 @@ function CombatFeatures.setAutoGrabEscapeEnabled(value)
                 return
             end
             task.wait(0.2)
+        end
+    end)
+end
+
+function CombatFeatures.setAntiInjuriesEnabled(value)
+    CombatFeatures.antiInjuriesEnabled = value
+    CombatFeatures.antiInjuriesRunId += 1
+    local runId = CombatFeatures.antiInjuriesRunId
+    if not value then
+        return
+    end
+
+    task.spawn(function()
+        while CombatFeatures.antiInjuriesEnabled and CombatFeatures.antiInjuriesRunId == runId do
+            pcall(function()
+                local character = LocalPlayer.Character
+                local injuries = character and character:FindFirstChild("Injuries")
+                if injuries then
+                    for _, injury in ipairs(injuries:GetChildren()) do
+                        injury:Destroy()
+                    end
+                end
+            end)
+            task.wait(2.5)
         end
     end)
 end
@@ -1393,19 +1636,106 @@ function FarmFeatures.startSafetyWatch(runId)
     end)
 end
 
-function FarmFeatures.shouldHoldForSafetyTimer()
+function FarmFeatures.shouldHoldForSafetyTimer(targetTitan)
     local mode = workspace:GetAttribute("Type")
     local minimumTime = mode == "Missions" and FarmFeatures.missionSafetyTimer
         or mode == "Raids" and FarmFeatures.raidSafetyTimer
+    local secondsAttribute = tonumber(workspace:GetAttribute("Seconds"))
+    local gameSeconds = secondsAttribute or 0
+    local now = tick()
+
+    -- Mahmut updates this clock on every attack-loop pass, including modes
+    -- without a safety timer, so mode changes and timer resets share one baseline.
+    if gameSeconds ~= FarmFeatures.raidSafetySecondsVal then
+        FarmFeatures.raidSafetySecondsVal = gameSeconds
+        FarmFeatures.raidSafetySecondsStamp = now
+    end
     if not minimumTime then
         return false, 0
     end
 
-    local gameSeconds = tonumber(workspace:GetAttribute("Seconds"))
-    if not gameSeconds then
+    if mode == "Raids" then
+        local remainingTime = minimumTime - gameSeconds
+        if remainingTime <= 0 then
+            return false, 0
+        end
+
+        local timerStuck = now - FarmFeatures.raidSafetySecondsStamp > 6
+        local bossHp = FarmFeatures.raidBossHpHold and CombatFeatures.getRaidBossHpPercent() or nil
+        local hpThreshold = math.clamp(tonumber(FarmFeatures.raidBossHpThreshold) or 25, 5, 50)
+        if bossHp and bossHp <= hpThreshold then
+            if timerStuck then
+                -- Mahmut alternates one held tick with a 1.5s window for a small Titan.
+                if now - FarmFeatures.raidBossChipAt >= 1.5 then
+                    FarmFeatures.raidBossChipAt = now
+                    return true, remainingTime
+                end
+
+                local chipNape, chipTitan = CombatFeatures.getNearestSmallTitanNape()
+                if chipNape and chipTitan then
+                    return false, remainingTime, chipNape, chipTitan
+                end
+                return false, 0
+            end
+
+            local alternateNape, alternateTitan = CombatFeatures.getNearestSmallTitanNape()
+            if not alternateNape or not alternateTitan then
+                return true, remainingTime
+            end
+
+            -- While Seconds is moving, Mahmut allows safe objective progress on
+            -- ordinary Titans but holds the last required hits.
+            local objectives = Services.ReplicatedStorage:FindFirstChild("Objectives")
+            local holdableObjectives = {
+                Slay = true, Kill = true, Defend = true, Protect = true,
+                Guard = true, Protect_HQ = true,
+            }
+            local selectedObjective
+            if objectives then
+                for _, objective in ipairs(objectives:GetChildren()) do
+                    if holdableObjectives[objective.Name] then
+                        selectedObjective = objective
+                        break
+                    end
+                end
+            end
+            if not selectedObjective or not selectedObjective:IsA("ValueBase") then
+                return true, remainingTime
+            end
+
+            local value = tonumber(selectedObjective.Value) or 0
+            local requirement = tonumber(selectedObjective:GetAttribute("Requirement")) or 0
+            local shouldHold = false
+            local objectiveName = workspace:GetAttribute("Objective")
+            if objectiveName == "Breach" then
+                shouldHold = selectedObjective.Name == "Protect_HQ"
+                    and requirement > 1 and value >= requirement - 2
+            elseif selectedObjective.Name == "Protect_HQ" or selectedObjective.Name == "Guard"
+                or selectedObjective.Name == "Defend" then
+                shouldHold = requirement > 1 and value >= requirement - 2
+            elseif selectedObjective.Name == "Slay" or selectedObjective.Name == "Kill" then
+                local hitMargin = FarmFeatures.multiHitEnabled
+                    and math.max(1, tonumber(FarmFeatures.multiHitAmount) or 1) or 1
+                shouldHold = requirement > 1 and value >= requirement - hitMargin
+            end
+            return shouldHold, remainingTime, alternateNape, alternateTitan
+        end
+
+        if timerStuck then
+            -- Mahmut keeps holding the boss when HP is above the chip threshold,
+            -- even if Seconds is frozen. Only the low-HP branch chips small Titans.
+            return true, remainingTime
+        end
+
+        -- Before the configured time, hold the raid boss while its HP is above
+        -- the optional chip threshold.
+        return true, remainingTime
+    end
+
+    if mode == "Missions" and secondsAttribute == nil then
         return false, 0
     end
-    local now = tick()
+
     if FarmFeatures.lastSessionSeconds == nil or gameSeconds < FarmFeatures.lastSessionSeconds then
         FarmFeatures.lastSessionSecondsChangedAt = now
     elseif gameSeconds ~= FarmFeatures.lastSessionSeconds then
@@ -1647,10 +1977,14 @@ function FarmFeatures.start()
                 continue
             end
 
-            FarmFeatures.movementNape = nape
-            FarmFeatures.movementTarget = nape.Position + Vector3.new(0, FarmFeatures.hoverHeight, 0)
+            local targetTitan = CombatFeatures.getTitanFromNape(nape)
+            if not CombatFeatures.isTitanAttackable(targetTitan) then
+                FarmFeatures.setStatus("Waiting for Titan ability to end")
+                continue
+            end
 
-            local safetyHold, safetyRemaining = FarmFeatures.shouldHoldForSafetyTimer()
+            local safetyHold, safetyRemaining, safetyNape, safetyTitan =
+                FarmFeatures.shouldHoldForSafetyTimer(targetTitan)
             if safetyHold then
                 FarmFeatures.setStatus(string.format(
                     "Safety hold: %ds remaining",
@@ -1658,11 +1992,17 @@ function FarmFeatures.start()
                 ))
                 continue
             end
+            if safetyNape and safetyTitan and CombatFeatures.isTitanAttackable(safetyTitan) then
+                nape, targetTitan = safetyNape, safetyTitan
+            end
+
+            FarmFeatures.movementNape = nape
+            FarmFeatures.movementTarget = nape.Position + Vector3.new(0, FarmFeatures.hoverHeight, 0)
 
             local attackRange = (tonumber(FarmFeatures.hoverHeight) or 200) + 50
             local weapon = LocalPlayer:GetAttribute("Weapon") or "Blades"
             local attackCooldown = weapon == "Blades" and 0.15 or 1
-            if CombatFeatures.isTitanAttackable(CombatFeatures.getTitanFromNape(nape))
+            if CombatFeatures.isTitanAttackable(targetTitan)
                 and (rootPart.Position - nape.Position).Magnitude <= attackRange
                 and tick() - FarmFeatures.lastAttackTime >= attackCooldown then
                 FarmFeatures.lastAttackTime = tick()
@@ -1671,7 +2011,25 @@ function FarmFeatures.start()
 
             local mode = workspace:GetAttribute("Type") or "Combat"
             local seconds = workspace:GetAttribute("Seconds")
-            if seconds then
+            if mode == "Raids" and workspace:GetAttribute("Objective") == "Colossal Titan"
+                and CombatFeatures.getColossalRaidPhase() == 1 then
+                FarmFeatures.setStatus("Colossal stall phase | Farming nearby Titans")
+                continue
+            end
+            local raidSafetyRemaining = tonumber(FarmFeatures.raidSafetyTimer) - (tonumber(seconds) or 0)
+            if mode == "Raids" and raidSafetyRemaining > 0 then
+                if tick() - FarmFeatures.raidSafetySecondsStamp > 6 then
+                    FarmFeatures.setStatus(string.format(
+                        "Raid timer paused | %ds safety remaining",
+                        math.ceil(raidSafetyRemaining)
+                    ))
+                else
+                    FarmFeatures.setStatus(string.format(
+                        "Raid safety: %ds remaining",
+                        math.ceil(raidSafetyRemaining)
+                    ))
+                end
+            elseif seconds then
                 FarmFeatures.setStatus(string.format("Farming %s | %ds", tostring(mode), seconds))
             else
                 FarmFeatures.setStatus("Farming " .. tostring(mode))
@@ -1842,6 +2200,91 @@ local function setAutoRetryEnabled(value)
     AutoRetry.runId += 1
     AutoRetry.busy = false
 end
+
+;(function()
+local function clickRaidChestButton(button)
+    if not button or not button:IsA("GuiButton") or not button.Visible or not button.Active then
+        return false
+    end
+    local succeeded = pcall(function()
+        Services.GuiService.SelectedObject = button
+        task.wait(0.1)
+        Services.VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+        task.wait(0.1)
+        Services.VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+    end)
+    Services.GuiService.SelectedObject = nil
+    return succeeded
+end
+
+local function waitForRaidChestChild(chests, childName, timeout)
+    local deadline = tick() + (timeout or 10)
+    repeat
+        local child = chests and chests:FindFirstChild(childName)
+        if child and child.Visible and child:IsA("GuiButton") then
+            return child
+        end
+        task.wait(0.15)
+    until tick() >= deadline or not chests or not chests.Parent
+    return nil
+end
+
+local function openRaidChests()
+    if FarmFeatures.autoOpenChestBusy or not FarmFeatures.enabled or workspace:GetAttribute("Type") ~= "Raids" then
+        return
+    end
+    FarmFeatures.autoOpenChestBusy = true
+    task.spawn(function()
+        local succeeded, chestError = pcall(function()
+            local deadline = tick() + 12
+            local chests
+            repeat
+                local interface = PlayerGui:FindFirstChild("Interface")
+                local candidate = interface and interface:FindFirstChild("Chests")
+                if candidate and candidate.Visible then
+                    chests = candidate
+                    break
+                end
+                task.wait(0.25)
+            until tick() >= deadline or not FarmFeatures.enabled
+
+            if chests then
+                local freeButton = waitForRaidChestChild(chests, "Free", 8)
+                if freeButton then
+                    clickRaidChestButton(freeButton)
+                end
+
+                if FarmFeatures.autoOpenBothChestEnabled and FarmFeatures.enabled then
+                    task.wait(1.5)
+                    local premiumButton = waitForRaidChestChild(chests, "Premium", 10)
+                    if premiumButton then
+                        clickRaidChestButton(premiumButton)
+                    end
+                end
+
+                local finishButton = waitForRaidChestChild(chests, "Finish", 12)
+                if not finishButton then
+                    task.wait(2)
+                    finishButton = waitForRaidChestChild(chests, "Finish", 8)
+                end
+                if finishButton then
+                    clickRaidChestButton(finishButton)
+                end
+            end
+        end)
+        FarmFeatures.autoOpenChestBusy = false
+        if not succeeded then
+            warn("[AOTR] Raid chest handling failed: " .. tostring(chestError))
+        end
+    end)
+end
+
+workspace:GetAttributeChangedSignal("Rewarded"):Connect(function()
+    if workspace:GetAttribute("Rewarded") == true then
+        task.delay(0.5, openRaidChests)
+    end
+end)
+end)()
 
 local function updateAutoLobbySubtitle()
     if AutoLobby.titleStack then
@@ -2805,6 +3248,22 @@ local window = App:Window({
 local mouseInput = Services.UserInputService
 local previousMouseIconEnabled = mouseInput.MouseIconEnabled
 windowBodyInstance = window.Structures.Body.__instance
+do
+    local executionEnvironment = _G
+    if type(getgenv) == "function" then
+        local succeeded, environment = pcall(getgenv)
+        if succeeded and type(environment) == "table" then
+            executionEnvironment = environment
+        end
+    end
+    local screenGui = windowBodyInstance
+    while screenGui and not screenGui:IsA("ScreenGui") do
+        screenGui = screenGui.Parent
+    end
+    if screenGui then
+        executionEnvironment.__AOTRScreenGui = screenGui
+    end
+end
 startAutoRetryUiWatch()
 local windowPillInstance = App.Structures.WindowPill.__instance
 local mouseBehaviorBeforeUi = {
@@ -2929,27 +3388,26 @@ do
         end,
     })
 
-    local autoExecuteRow = autoFarmForm:Row({ SearchIndex = "Auto Execute" })
-    autoExecuteRow:Left():TitleStack({
-        Title = "Auto Execute",
-        Subtitle = "Queue the script to run again after teleporting.",
+    local farmSettingsRow = autoFarmForm:Row({ SearchIndex = "Farm Settings" })
+    farmSettingsRow:Left():TitleStack({
+        Title = "Farm Settings",
+        Subtitle = "Choose additional actions while Auto Farm is running.",
     })
-    autoExecuteRow:Right():Toggle({
-        Value = false,
-        ValueChanged = function(_, value)
-            FarmFeatures.setAutoExecute(value)
-        end,
-    })
-
-    local autoRetryRow = autoFarmForm:Row({ SearchIndex = "Auto Retry" })
-    autoRetryRow:Left():TitleStack({
-        Title = "Auto Retry",
-        Subtitle = "Automatically press Retry after a mission or raid ends.",
-    })
-    autoRetryRow:Right():Toggle({
-        Value = false,
-        ValueChanged = function(_, value)
-            setAutoRetryEnabled(value)
+    farmSettingsRow:Right():PopUpButton({
+        Options = { "Auto Execute", "Auto Retry", "Auto Open Both Chest" },
+        Maximum = 3,
+        Value = {},
+        ValueChanged = function(self, selectedIndexes)
+            local selected = {}
+            for _, selectedIndex in ipairs(selectedIndexes or {}) do
+                local option = self.Options[selectedIndex]
+                if option then
+                    selected[option] = true
+                end
+            end
+            FarmFeatures.setAutoExecute(selected["Auto Execute"] == true)
+            setAutoRetryEnabled(selected["Auto Retry"] == true)
+            FarmFeatures.autoOpenBothChestEnabled = selected["Auto Open Both Chest"] == true
         end,
     })
 end
@@ -3073,6 +3531,30 @@ autoFullReloadRow:Right():Toggle({
     ValueChanged = function(_, value)
         CombatFeatures.autoFullReloadEnabled = value
         CombatFeatures.updateCombatReloadLoop()
+    end,
+})
+
+local infiniteSpearsRow = CombatFeaturesForm:Row({ SearchIndex = "Infinite Spears" })
+infiniteSpearsRow:Left():TitleStack({
+    Title = "Infinite Spears",
+    Subtitle = "Allow spear attacks at zero ammo; Auto Full Reload still reloads when enabled.",
+})
+infiniteSpearsRow:Right():Toggle({
+    Value = CombatFeatures.infiniteSpearsEnabled,
+    ValueChanged = function(_, value)
+        CombatFeatures.infiniteSpearsEnabled = value
+    end,
+})
+
+local antiInjuriesRow = CombatFeaturesForm:Row({ SearchIndex = "Anti Injuries" })
+antiInjuriesRow:Left():TitleStack({
+    Title = "Anti Injuries",
+    Subtitle = "Remove character injuries every 2.5 seconds.",
+})
+antiInjuriesRow:Right():Toggle({
+    Value = CombatFeatures.antiInjuriesEnabled,
+    ValueChanged = function(_, value)
+        CombatFeatures.setAntiInjuriesEnabled(value)
     end,
 })
 
@@ -3798,6 +4280,7 @@ createWaveRow:Right():Button({
 })
 
 -- Main Menu --
+;(function()
 local mainMenu = window:Section({ Title = "Main Menu" })
 local MainMenuAutomation = mainMenu:Tab({
     Title = "Automation",
@@ -3958,6 +4441,7 @@ goToLobbyRow:Right():Toggle({
     end,
 })
 
+end)()
 
 -- Misc --
 ;(function(window, App, cascade, Services, configRecorder)
@@ -4204,6 +4688,24 @@ returnMainMenuRow:Right():Button({
         end)
         if not succeeded then
             showUtilityNotification("Return To Main Menu", tostring(teleportError))
+        end
+    end,
+})
+
+local returnTradingRow = utilityForm:Row({ SearchIndex = "Return To Trading" })
+returnTradingRow:Left():TitleStack({
+    Title = "Return To Trading",
+    Subtitle = "Teleport to the Trading world.",
+})
+returnTradingRow:Right():Button({
+    Label = "Go",
+    State = "Primary",
+    Pushed = function()
+        local succeeded, teleportError = pcall(function()
+            Services.TeleportService:Teleport(14932214603, Services.Players.LocalPlayer)
+        end)
+        if not succeeded then
+            showUtilityNotification("Return To Trading", tostring(teleportError))
         end
     end,
 })
